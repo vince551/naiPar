@@ -238,3 +238,141 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   html{scroll-behavior:auto}
   .stat-card:hover,.nav-link:hover,.button-primary:hover{transform:none}
 }
+
+
+/* Full-site glass surface pass — material treatment only; retain the existing Nairobi County palette */
+:root{
+  --glass-clear:rgba(255,255,255,.24);
+  --glass-soft:rgba(255,255,255,.38);
+  --glass-panel:rgba(255,255,255,.48);
+  --glass-edge:rgba(255,255,255,.68);
+  --glass-shadow:0 14px 34px rgba(4,54,37,.085),inset 0 1px 0 rgba(255,255,255,.72);
+}
+.sidebar,.topbar,.profile-switch,.safety-card,.session-pill,.nav-link,
+.button,.hero-panel,.hero-emblem,.floating-note,.stat-card,.panel,.pillar-strip,
+.impact-card,.forum-card,.sitting-card,.motion-row,.notice-banner,.impact-banner,
+.active-motion,.hall-topline,.hall-stage,.speaker-screen,.speaker-caption,
+.hall-quorum,.queue-table,.queue-row,.vote-choice,.hall-actionbar,
+.hansard-document,.hansard-minutes,.modal,.toast,.order-summary,.search-box,
+.agenda-item,.record-row,.action-step,.forum-mini,.forum-mini-list,
+.table-head,.table-row,.date-block,.round-arrow,.pill,.login-tabs,
+.picture-passphrase button,.modal input,.modal textarea,.modal select,
+.modal .consent-check,.form-note,.demo-warning,.icon-btn,.user-chip,
+.notification-btn,.hall-controls .button,.hall-programme,.hall-side{
+  -webkit-backdrop-filter:blur(22px) saturate(155%);
+  backdrop-filter:blur(22px) saturate(155%);
+}
+.sidebar{
+  background:linear-gradient(155deg,rgba(4,54,37,.88),rgba(3,39,29,.84));
+  border-right-color:rgba(255,255,255,.22);
+}
+.topbar{background:rgba(246,250,246,.62)}
+.profile-switch,.safety-card{background:rgba(255,255,255,.105)}
+.nav-link{background:rgba(255,255,255,.025);border-color:rgba(255,255,255,.07)}
+.nav-link:hover{background:rgba(255,255,255,.14)}
+.nav-link.active{background:linear-gradient(110deg,rgba(232,194,78,.22),rgba(255,255,255,.13))}
+.session-pill{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.3)}
+.button-primary{
+  background:linear-gradient(135deg,rgba(8,97,67,.82),rgba(6,67,47,.78));
+  border-color:rgba(226,184,63,.72);
+  box-shadow:0 8px 22px rgba(5,78,52,.14),inset 0 1px 0 rgba(255,255,255,.25);
+}
+.button-primary:hover{background:linear-gradient(135deg,rgba(10,117,80,.88),rgba(7,81,57,.84))}
+.button-light,.button-outline{background:rgba(255,255,255,.38);border-color:rgba(255,255,255,.78)}
+.button-white{background:rgba(255,255,255,.7)}
+.hero-panel{
+  background:
+    radial-gradient(circle at 82% 28%,rgba(240,205,99,.17),transparent 24%),
+    linear-gradient(118deg,rgba(4,57,39,.84),rgba(7,94,62,.79) 58%,rgba(18,111,76,.76));
+  border-color:rgba(236,204,111,.66);
+  box-shadow:0 22px 48px rgba(5,61,41,.16),inset 0 1px 0 rgba(255,255,255,.24);
+}
+.hero-emblem{background:rgba(255,255,255,.11)}
+.floating-note{background:rgba(255,255,255,.19);border-color:rgba(255,255,255,.34)}
+.stat-card,.panel,.pillar-strip,.forum-card,.sitting-card,.order-summary,
+.hall-quorum,.hansard-document,.search-box,.agenda-item,.record-row,.action-step{
+  background:rgba(255,255,255,.42);
+  border:1px solid var(--glass-edge);
+  box-shadow:var(--glass-shadow);
+}
+.stat-card,.panel,.pillar-strip,.forum-card,.sitting-card,.order-summary,
+.hansard-document{border-radius:18px}
+.motion-row,.forum-mini,.record-row,.agenda-item,.action-step,.table-row{
+  background:rgba(255,255,255,.22);
+  border-color:rgba(255,255,255,.42);
+  transition:background .2s ease,border-color .2s ease,box-shadow .2s ease;
+}
+.motion-row:hover,.forum-mini:hover,.record-row:hover,.table-row:hover,.agenda-item:hover{
+  background:rgba(255,255,255,.52);
+  border-color:rgba(255,255,255,.8);
+  box-shadow:0 8px 22px rgba(4,54,37,.07),inset 0 1px rgba(255,255,255,.8);
+}
+.impact-card{
+  background:linear-gradient(145deg,rgba(6,78,52,.78),rgba(8,107,72,.73));
+  border-color:rgba(237,206,117,.55);
+}
+.hall-topline,.hall-actionbar{
+  background:linear-gradient(110deg,rgba(4,54,37,.82),rgba(7,91,61,.78));
+  border-color:rgba(237,205,111,.62);
+}
+.hall-stage{background:linear-gradient(145deg,rgba(4,48,34,.82),rgba(6,69,48,.78))}
+.speaker-screen{background:linear-gradient(145deg,rgba(18,91,63,.78),rgba(3,43,31,.84))}
+.speaker-caption{background:rgba(2,31,22,.62)}
+.hall-quorum{background:rgba(255,255,255,.4)}
+.queue-table{background:rgba(255,255,255,.28);border-color:rgba(255,255,255,.68)}
+.queue-head,.table-head{background:rgba(7,84,59,.075);backdrop-filter:blur(16px)}
+.queue-row{background:rgba(255,255,255,.12)}
+.queue-row.speaking{background:rgba(232,195,84,.18)}
+.active-motion{background:rgba(255,255,255,.28);border-color:rgba(255,255,255,.55)}
+.vote-choice,.vote-choice.yes,.vote-choice.no,.vote-choice.abstain{
+  background:rgba(255,255,255,.3);
+  border-color:rgba(255,255,255,.72);
+}
+.vote-choice.yes{background:rgba(80,167,111,.13)}
+.vote-choice.no{background:rgba(195,90,90,.09)}
+.vote-choice.chosen{box-shadow:0 0 0 2px rgba(213,173,63,.25),inset 0 1px rgba(255,255,255,.8)}
+.hansard-document{background:rgba(255,255,255,.58)}
+.hansard-table>*{background:rgba(255,255,255,.18)}
+.hansard-table>b{background:rgba(7,84,59,.075)}
+.hansard-minutes{background:rgba(7,84,59,.055)}
+.notice-banner,.impact-banner{background:rgba(255,255,255,.36);border:1px solid var(--glass-edge);box-shadow:var(--glass-shadow)}
+.date-block{background:rgba(230,195,89,.24);border-color:rgba(201,160,50,.28)}
+.round-arrow,.icon-btn,.modal-x{background:rgba(255,255,255,.28);border:1px solid rgba(255,255,255,.48)}
+.search-box{background:rgba(255,255,255,.38);border-color:rgba(255,255,255,.78)}
+.modal-backdrop{background:rgba(3,35,25,.48);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+.modal{background:rgba(247,251,247,.72);border-color:rgba(255,255,255,.86)}
+.modal input,.modal textarea,.modal select{
+  background:rgba(255,255,255,.42);
+  border-color:rgba(26,91,58,.2);
+}
+.modal input:focus,.modal textarea:focus,.modal select:focus{background:rgba(255,255,255,.62)}
+.login-tabs,.modal .consent-check,.form-note,.demo-warning{background:rgba(7,84,59,.055);border-color:rgba(7,84,59,.12)}
+.login-tabs button.selected{background:rgba(255,255,255,.58)}
+.picture-passphrase button{background:rgba(255,255,255,.28);border-color:rgba(255,255,255,.68)}
+.toast{background:rgba(4,54,37,.82);border-color:rgba(240,211,119,.6)}
+.pill{background:rgba(7,84,59,.075);border-color:rgba(7,84,59,.16)}
+.hall-actionbar button{background:rgba(255,255,255,.045);border-color:rgba(226,184,63,.52)}
+.hall-actionbar button:hover{background:rgba(255,255,255,.13)}
+input,textarea,select{background-clip:padding-box}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .sidebar,.topbar,.profile-switch,.safety-card,.session-pill,.nav-link,.button,
+  .hero-panel,.floating-note,.stat-card,.panel,.pillar-strip,.impact-card,.forum-card,
+  .sitting-card,.motion-row,.notice-banner,.impact-banner,.hall-topline,.hall-stage,
+  .speaker-screen,.speaker-caption,.hall-quorum,.queue-table,.vote-choice,
+  .hansard-document,.modal,.toast{box-shadow:0 12px 30px rgba(4,54,37,.12)}
+}
+@media(max-width:800px){
+  .sidebar{background:linear-gradient(155deg,rgba(4,54,37,.94),rgba(3,39,29,.92))}
+  .topbar{background:rgba(246,250,246,.72)}
+}
+@media(prefers-reduced-transparency:reduce){
+  .sidebar,.topbar,.profile-switch,.safety-card,.session-pill,.button,.hero-panel,
+  .floating-note,.stat-card,.panel,.pillar-strip,.impact-card,.forum-card,
+  .sitting-card,.motion-row,.notice-banner,.impact-banner,.hall-topline,.hall-stage,
+  .speaker-screen,.speaker-caption,.hall-quorum,.queue-table,.vote-choice,
+  .hansard-document,.modal,.toast{
+    -webkit-backdrop-filter:none;backdrop-filter:none;
+    background-color:rgba(255,255,255,.88);
+  }
+  .sidebar,.hall-topline,.hall-stage,.impact-card,.toast{background-color:rgba(4,54,37,.92)}
+}
