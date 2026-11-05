@@ -18,8 +18,8 @@ export const forums = [
 ];
 
 export const members = [
-  { initials: 'AM', name: 'Amina M.', ward: 'Westlands', role: 'Delegate', status: 'Verified' },
-  { initials: 'DO', name: 'David O.', ward: 'Embakasi East', role: 'Delegate', status: 'Verified' },
-  { initials: 'GW', name: 'Grace W.', ward: 'Kibra', role: 'Committee member', status: 'Verified' },
-  { initials: 'BK', name: 'Brian K.', ward: 'Dagoretti North', role: 'Delegate', status: 'Pending' }
+  { initials: 'AM', name: 'Amina M.', ward: 'Nyali', role: 'Delegate', status: 'Verified' },
+  { initials: 'DO', name: 'David O.', ward: 'Kisauni', role: 'Delegate', status: 'Verified' },
+  { initials: 'GW', name: 'Grace W.', ward: 'Likoni', role: 'Committee member', status: 'Verified' },
+  { initials: 'BK', name: 'Brian K.', ward: 'Changamwe', role: 'Delegate', status: 'Pending' }
 ];

@@ -1,6 +1,6 @@
-# NCCeAS — Nairobi County Children E-Assembly
+# MCCeAS — Mombasa County Children E-Assembly
 
-**Sauti Yetu** is a digital participation and Assembly-workspace concept for children in Nairobi County.
+**Sauti Yetu** is a digital participation and Assembly-workspace concept for children in Mombasa County.
 
 ## Three pillars
 1. **Official Assembly Hall** — delegate workspace, sittings, order papers, motions, debate, voting interface and records.
@@ -32,4 +32,4 @@ Do not enter real children's personal information or safeguarding disclosures. B
 Formal parliamentary procedures and standing orders must be checked against the applicable approved governance documents. This independent project does not claim government endorsement, does not replace recognised county or national children's assembly structures, and cannot compel stakeholder action.
 
 ## Project identity
-NCCeAS means **Nairobi County Children E-Assembly**. “Sauti Yetu” is the platform experience name.
+MCCeAS means **Mombasa County Children E-Assembly**. “Sauti Yetu” is the platform experience name.

@@ -16,7 +16,7 @@ h1,h2,.hero-copy h2,.section-head h2,.modal h2{font-family:Georgia,'Times New Ro
 .login-tabs{display:grid;grid-template-columns:1fr 1fr;background:#f1f4f7;border-radius:7px;padding:3px;margin:17px 0 4px}.login-tabs button{border:0;background:transparent;border-radius:5px;padding:9px 5px;font-size:9px;color:#718196;font-weight:700}.login-tabs button.selected{background:white;color:#173d68;box-shadow:0 1px 5px #142b461a}.login-extra{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:2px 0 7px}.login-extra button,.register-link{border:0;background:none;padding:0;color:#2d679d;font-size:9px;font-weight:700}.login-extra span{font-size:8px;color:#8a98a7;text-align:right}.picture-passphrase{display:flex;gap:7px;margin-bottom:8px}.picture-passphrase button{flex:1;border:1px solid #e0e7ed;background:#f6f8fa;border-radius:7px;padding:11px 4px;color:#45617c;font-size:10px}.register-link{display:block;margin:13px auto 0;color:#8190a0;font-weight:400}.register-link b{color:#2e679a}.register-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.modal .consent-check{display:flex;align-items:flex-start;gap:8px;line-height:1.5;font-weight:500;background:#f4f7f9;padding:10px;border-radius:7px}.modal .consent-check input{margin:1px 0 0;flex-shrink:0}
 
 
-/* Nairobi County glassmorphism refresh — Sauti Yetu */
+/* Mombasa County glassmorphism refresh — Sauti Yetu */
 :root{
   --navy:#073f2d;
   --blue:#0d6748;
@@ -240,7 +240,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 }
 
 
-/* Full-site glass surface pass — material treatment only; retain the existing Nairobi County palette */
+/* Full-site glass surface pass — material treatment only; retain the Mombasa County palette */
 :root{
   --glass-clear:rgba(255,255,255,.24);
   --glass-soft:rgba(255,255,255,.38);
@@ -375,4 +375,98 @@ input,textarea,select{background-clip:padding-box}
     background-color:rgba(255,255,255,.88);
   }
   .sidebar,.hall-topline,.hall-stage,.impact-card,.toast{background-color:rgba(4,54,37,.92)}
+}
+
+
+/* Mombasa County identity: flag blue and white, with restrained coat-of-arms gold accents.
+   Glassmorphism, component structure and responsive behaviour remain intact. */
+:root{
+  --navy:#001F88;--blue:#0057B8;--gold:#E4AA19;
+  --county-green:#001F88;--county-green-deep:#00145B;--county-green-soft:#E8F1FF;
+  --county-gold:#E4AA19;--county-yellow:#F4C64E;--county-ink:#14264B;
+  --muted:#657895;--line:rgba(0,45,145,.14);
+  --glass:rgba(255,255,255,.62);--glass-strong:rgba(255,255,255,.8);
+  --glass-border:rgba(255,255,255,.76);
+  --mombasa-blue:#001F88;--mombasa-cyan:#00A6D6;--mombasa-gold:#E4AA19;
+}
+body{
+  color:var(--county-ink);
+  background:radial-gradient(ellipse at 8% 8%,rgba(91,164,235,.19),transparent 35%),radial-gradient(ellipse at 92% 14%,rgba(228,170,25,.14),transparent 29%),linear-gradient(135deg,#edf4ff 0%,#fbfcff 52%,#e8f1ff 100%);
+  background-attachment:fixed;
+}
+.sidebar{background:linear-gradient(155deg,rgba(0,31,136,.94),rgba(0,20,91,.91));border-right:1px solid rgba(255,255,255,.2);box-shadow:12px 0 40px rgba(0,24,92,.16)}
+.brand-mark{border-color:rgba(244,198,78,.72);color:#f4c64e}
+.brand span,.workspace-label,.nav-group>p,.sidebar-foot{color:#c5d7f6}
+.profile-switch,.safety-card{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.2)}
+.profile-avatar,.user-avatar{background:linear-gradient(145deg,#fff,#dceaff);color:#001f88}
+.nav-link{color:#d4e2ff}
+.nav-link:hover{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.17)}
+.nav-link.active{background:linear-gradient(110deg,rgba(228,170,25,.25),rgba(255,255,255,.12));border-color:rgba(244,198,78,.42);box-shadow:inset 3px 0 #e4aa19}
+.nav-link.active svg,.brand-mark{color:#f4c64e}
+.nav-count{background:rgba(255,255,255,.16);color:#fff}
+.online-dot,.session-pill span{background:#74d4f1;box-shadow:0 0 0 3px rgba(116,212,241,.15)}
+.topbar{background:rgba(248,251,255,.68);border-bottom-color:rgba(0,45,145,.12)}
+.crumb{color:#7384a0}.crumb b,.topbar .icon-btn,.user-chip{color:#19376e}
+.icon-btn:hover{background:rgba(0,55,170,.08)}
+.session-pill{background:rgba(0,55,170,.07);border-color:rgba(0,55,170,.15);color:#244b92}
+.page-heading h1{color:#102a62}.heading-name{color:#6c85b6}
+.eyebrow{color:#98701a}.eyebrow-line{background:var(--mombasa-gold)}
+.button-primary{color:#fff;background:linear-gradient(135deg,rgba(0,55,170,.9),rgba(0,31,136,.88));border:1px solid rgba(228,170,25,.7);box-shadow:0 8px 22px rgba(0,31,136,.16),inset 0 1px rgba(255,255,255,.22)}
+.button-primary:hover{background:linear-gradient(135deg,#075fc4,#002a9d)}
+.button-light,.button-outline{color:#173b80;background:rgba(255,255,255,.4);border-color:rgba(255,255,255,.82)}
+.button-white{color:#001f88;background:rgba(255,255,255,.84)}
+.hero-panel{background:radial-gradient(circle at 82% 28%,rgba(228,170,25,.2),transparent 24%),linear-gradient(118deg,rgba(0,25,111,.91),rgba(0,55,170,.86) 58%,rgba(0,103,177,.8));border-color:rgba(244,198,78,.62);box-shadow:0 22px 48px rgba(0,31,136,.18),inset 0 1px rgba(255,255,255,.24)}
+.hero-copy h2 em,.hero-bottom b{color:#f4c64e}.hero-kicker{color:#d8e8ff}
+.hero-emblem{color:#f4c64e;border-color:rgba(244,198,78,.72);background:rgba(255,255,255,.1)}
+.orbit{border-color:rgba(255,255,255,.25)}.floating-note{background:rgba(255,255,255,.17);border-color:rgba(255,255,255,.32)}
+.stat-card,.panel,.pillar-strip,.forum-card,.sitting-card,.order-summary,.hall-quorum,.hansard-document,.search-box,.agenda-item,.record-row,.action-step{background:rgba(255,255,255,.43);border:1px solid rgba(255,255,255,.78);box-shadow:0 14px 34px rgba(0,31,136,.075),inset 0 1px rgba(255,255,255,.8)}
+.stat-card>b,.section-head h2,.pillar-strip b,.hansard-document h2{color:#102f78}
+.stat-top svg,.motion-icon,.impact-icon,.modal-symbol{color:#0757ad}
+.stat-top{color:#7184a3}.text-action,.login-extra button,.register-link b{color:#0757ad}
+.date-block{color:#76520c;background:linear-gradient(145deg,rgba(255,239,192,.75),rgba(228,170,25,.25));border-color:rgba(228,170,25,.32)}
+.status-label{color:#087e9f}.status-label i{background:#00a6d6}
+.pill{background:rgba(0,55,170,.075);color:#17458f;border-color:rgba(0,55,170,.14)}
+.pill-green{background:rgba(0,166,214,.12);color:#006d91}
+.motion-row,.forum-mini,.record-row,.agenda-item,.action-step,.table-row{background:rgba(255,255,255,.23);border-color:rgba(255,255,255,.48)}
+.motion-row:hover,.forum-mini:hover,.record-row:hover,.table-row:hover,.agenda-item:hover{background:rgba(255,255,255,.55);border-color:rgba(255,255,255,.86);box-shadow:0 8px 22px rgba(0,31,136,.07),inset 0 1px rgba(255,255,255,.85)}
+.motion-icon,.impact-icon{background:rgba(0,55,170,.08);border-color:rgba(0,55,170,.13)}
+.forum-dot.blue{background:#0057b8}.forum-dot.green{background:#00a6d6}.forum-dot.gold{background:#e4aa19}
+.impact-card{background:linear-gradient(145deg,rgba(0,31,136,.87),rgba(0,79,170,.8));border-color:rgba(244,198,78,.55)}
+.impact-card .eyebrow,.impact-card button{color:#f4c64e}.impact-card h3{color:#fff}.impact-card p{color:#d7e5ff}
+.pillar-strip>div>span{color:#b17b10}
+.hall-topline,.hall-actionbar{background:linear-gradient(110deg,rgba(0,25,111,.9),rgba(0,64,158,.86));border-color:rgba(244,198,78,.58)}
+.hall-stage{background:linear-gradient(145deg,rgba(0,20,75,.9),rgba(0,47,128,.85))}
+.speaker-screen{background:linear-gradient(145deg,rgba(0,61,150,.88),rgba(0,23,91,.94))}
+.speaker-caption{background:rgba(0,15,62,.68)}
+.speaker-avatar{background:linear-gradient(145deg,#fff0c4,#e4aa19);color:#001f88}
+.hall-quorum{background:rgba(255,255,255,.44)}.quorum-track i{background:linear-gradient(90deg,#00a6d6,#e4aa19)}
+.queue-table{background:rgba(255,255,255,.3);border-color:rgba(255,255,255,.72)}
+.queue-head,.table-head{background:rgba(0,55,170,.075);color:#62799f}
+.queue-row{background:rgba(255,255,255,.14)}.queue-row.speaking{background:rgba(228,170,25,.16)}
+.active-motion{background:rgba(255,255,255,.3);border-color:rgba(255,255,255,.6)}
+.vote-choice,.vote-choice.yes,.vote-choice.no,.vote-choice.abstain{background:rgba(255,255,255,.34);border-color:rgba(255,255,255,.76)}
+.vote-choice.yes{background:rgba(0,166,214,.12);color:#006d91}.vote-choice.no{background:rgba(195,90,90,.09)}
+.vote-choice.chosen{box-shadow:0 0 0 2px rgba(228,170,25,.3),inset 0 1px rgba(255,255,255,.84)}
+.hansard-document{background:rgba(255,255,255,.62);border-left-color:#e4aa19}
+.hansard-brand,.hansard-brand b{color:#0757ad}.hansard-document h2{color:#102f78}
+.hansard-rule{color:#1b3979;border-color:rgba(228,170,25,.65)}
+.hansard-minutes{background:rgba(0,55,170,.055);border-left-color:#e4aa19}
+.hansard-stamp{border-color:#1682a6;color:#1682a6}
+.notice-banner,.impact-banner{background:rgba(255,255,255,.39);border-color:rgba(255,255,255,.78);box-shadow:0 14px 34px rgba(0,31,136,.075),inset 0 1px rgba(255,255,255,.8)}
+.modal-backdrop{background:rgba(0,18,72,.48)}
+.modal{background:rgba(249,252,255,.76);border-color:rgba(255,255,255,.9)}
+.modal-symbol{background:rgba(0,55,170,.09);border-color:rgba(0,55,170,.14)}
+.modal h2{color:#102f78}.modal label{color:#38547f}
+.modal input,.modal textarea,.modal select{background:rgba(255,255,255,.46);border-color:rgba(0,55,170,.2);color:#14264b}
+.modal input:focus,.modal textarea:focus,.modal select:focus{background:rgba(255,255,255,.68);border-color:#0757ad;box-shadow:0 0 0 3px rgba(0,87,184,.13)}
+.login-tabs,.modal .consent-check,.form-note,.demo-warning{background:rgba(0,55,170,.055);border-color:rgba(0,55,170,.12)}
+.login-tabs button.selected{background:rgba(255,255,255,.64);color:#001f88}
+.picture-passphrase button{background:rgba(255,255,255,.34);border-color:rgba(255,255,255,.75);color:#173b80}
+.modal-x,.round-arrow,.icon-btn{background:rgba(255,255,255,.3);border-color:rgba(255,255,255,.56);color:#17458f}
+.toast{background:rgba(0,25,111,.88);border-color:rgba(244,198,78,.62)}
+input,textarea,select{accent-color:#0757ad}
+@media(max-width:800px){.sidebar{background:linear-gradient(155deg,rgba(0,31,136,.96),rgba(0,20,91,.94))}.topbar{background:rgba(248,251,255,.76)}}
+@media(prefers-reduced-transparency:reduce){
+  .sidebar,.topbar,.profile-switch,.safety-card,.session-pill,.button,.hero-panel,.floating-note,.stat-card,.panel,.pillar-strip,.impact-card,.forum-card,.sitting-card,.motion-row,.notice-banner,.impact-banner,.hall-topline,.hall-stage,.speaker-screen,.speaker-caption,.hall-quorum,.queue-table,.vote-choice,.hansard-document,.modal,.toast{-webkit-backdrop-filter:none;backdrop-filter:none;background-color:rgba(255,255,255,.9)}
+  .sidebar,.hall-topline,.hall-stage,.impact-card,.toast{background-color:rgba(0,31,136,.94)}
 }
