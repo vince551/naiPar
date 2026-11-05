@@ -4,7 +4,7 @@ import {
   ChevronRight, CircleHelp, ClipboardList, FileText, Flag, Handshake,
   HeartHandshake, Home, Landmark, Menu, MessageCircle, Plus, Search,
   ShieldCheck, Sparkles, Users, Vote, X, Send, Clock3, MapPin, LogOut,
-  PanelLeftClose, ChartNoAxesCombined
+  PanelLeftClose
 } from 'lucide-react';
 import { agenda, motions as initialMotions, forums as initialForums, members } from './data';
 
