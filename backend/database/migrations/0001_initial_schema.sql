@@ -7,8 +7,6 @@
 
 BEGIN;
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
 CREATE TYPE account_role AS ENUM (
   'public_child', 'delegate', 'speaker', 'clerk',
   'coordinator', 'stakeholder', 'admin'
