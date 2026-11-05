@@ -24,7 +24,7 @@ No credentials, encryption keys, guardian phone numbers, or child records belong
 
 ## Data model
 
-Migration `database/migrations/0001_initial_schema.sql` creates:
+Migrations in `database/migrations/` are applied in numeric order. `0001_initial_schema.sql` creates the core model and restricted projections; `0002_auth_sessions.sql` adds hashed sessions, login-attempt records and timestamp triggers; `0003_audit_integrity.sql` makes audit rows append-only and cast votes immutable. They create:
 
 | Area | Tables |
 |---|---|
