@@ -32,6 +32,11 @@ export function readConfig(env = process.env) {
   const encryptionKey = decodeEncryptionKey(
     required(env, 'GUARDIAN_PHONE_ENCRYPTION_KEY_BASE64')
   );
+  const guardianPhoneLookupPepper = requiredSecret(env, 'GUARDIAN_PHONE_LOOKUP_PEPPER');
+  const auditFingerprintPepper = requiredSecret(env, 'AUDIT_FINGERPRINT_PEPPER');
+  if (guardianPhoneLookupPepper === auditFingerprintPepper) {
+    throw new Error('Guardian lookup and audit fingerprint peppers must be different secrets');
+  }
 
   return Object.freeze({
     nodeEnv,
@@ -42,7 +47,7 @@ export function readConfig(env = process.env) {
     trustProxy: env.TRUST_PROXY === 'true',
     consentNoticeVersion: required(env, 'CONSENT_NOTICE_VERSION'),
     encryptionKey,
-    guardianPhoneLookupPepper: requiredSecret(env, 'GUARDIAN_PHONE_LOOKUP_PEPPER'),
-    auditFingerprintPepper: requiredSecret(env, 'AUDIT_FINGERPRINT_PEPPER')
+    guardianPhoneLookupPepper,
+    auditFingerprintPepper
   });
 }
