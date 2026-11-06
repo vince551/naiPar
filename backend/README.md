@@ -86,7 +86,7 @@ For the encryption key, generate 32 random bytes and base64-encode them, for exa
 openssl rand -base64 32
 ```
 
-Generate the lookup and audit peppers separately with a cryptographically secure random generator. Keep `.env` out of source control. In production, use a managed secret store and managed database encryption; do not bake secrets into an image or frontend environment. Give the API runtime database user only the required application DML permissions. Run `npm run migrate` with a separate privileged `MIGRATION_DATABASE_URL`; production migrations refuse to fall back to the runtime URL.
+Generate the lookup and audit peppers separately with a cryptographically secure random generator. Keep `.env` out of source control. In production, use a managed secret store and managed database encryption; do not bake secrets into an image or frontend environment. Give the API runtime database user only the required application DML permissions and no schema-owner privileges. Deny it `UPDATE`, `DELETE` and `TRUNCATE` on append-only audit, vote and stakeholder-update tables; grant only the inserts and reads the API actually needs. Run `npm run migrate` with a separate privileged `MIGRATION_DATABASE_URL`; production migrations refuse to fall back to the runtime URL.
 
 ## API: child registration request
 
@@ -113,7 +113,7 @@ The endpoint is rate-limited to five requests per IP in 15 minutes using the def
 
 ## Role and privacy boundaries
 
-The reusable role guards accept only an authentication context populated by a future server-side session resolver. They do not trust role names from request data or headers.
+The reusable role guards accept only an authentication context populated by a future server-side session resolver. They do not trust role names from request data or headers. Until that session resolver exists and is tested, these guards are library code rather than active protection on business endpoints.
 
 - Public children: public participation and their own permitted submissions only.
 - Delegates: official participation only after delegate verification and approved guardian consent.
