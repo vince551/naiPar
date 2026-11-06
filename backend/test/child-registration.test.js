@@ -8,6 +8,7 @@ import {
 import { normalizeKenyanPhone } from '../src/security/phone.js';
 import { createFieldCrypto } from '../src/security/field-crypto.js';
 import { requireAuthenticated, requireRoles } from '../src/security/authorization.js';
+import { stripMigrationEnvelope } from '../src/db/migrate.js';
 
 const validInput = () => ({
   fullName: 'Sample Child',
@@ -71,6 +72,15 @@ function createResponse() {
   };
 }
 
+
+test('migration runner preserves SQL comments and delegates transaction boundaries', () => {
+  const sql = '-- schema note\\nBEGIN;\\nCREATE TABLE sample (id integer);\\nCOMMIT;\\n';
+  const body = stripMigrationEnvelope(sql, '0001_sample.sql');
+  assert.match(body, /-- schema note/);
+  assert.match(body, /CREATE TABLE sample/);
+  assert.doesNotMatch(body, /^\\s*BEGIN\\s*;/i);
+  assert.doesNotMatch(body, /COMMIT\\s*;\\s*$/i);
+});
 
 test('encrypts identity fields with authenticated encryption and detects tampering', () => {
   const crypto = createFieldCrypto({
