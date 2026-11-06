@@ -2,21 +2,15 @@ import argon2 from 'argon2';
 import { readConfig } from './config.js';
 import { createApp } from './app.js';
 import { createDatabasePool } from './db/pool.js';
-import { runMigrations } from './db/migrate.js';
 
 async function start() {
   const config = readConfig();
   const pool = createDatabasePool(config);
 
   try {
-    const applied = await runMigrations(pool);
-    if (applied.length) {
-      console.log(JSON.stringify({
-        event: 'database_migrations_applied',
-        count: applied.length,
-        versions: applied
-      }));
-    }
+    // The runtime database role needs application DML only. Schema changes
+    // are performed separately by the migration command and a migration role.
+    await pool.query('SELECT 1');
 
     const app = createApp({
       pool,
