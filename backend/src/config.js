@@ -18,6 +18,10 @@ function requiredSecret(env, name) {
 
 export function readConfig(env = process.env) {
   const nodeEnv = env.NODE_ENV || 'development';
+  const port = Number.parseInt(env.PORT || '4000', 10);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('PORT must be an integer between 1 and 65535');
+  }
   const databaseUrl = required(env, 'DATABASE_URL');
   const databaseSsl = env.DATABASE_SSL === 'true';
 
@@ -31,7 +35,7 @@ export function readConfig(env = process.env) {
 
   return Object.freeze({
     nodeEnv,
-    port: Number.parseInt(env.PORT || '4000', 10),
+    port,
     databaseUrl,
     databaseSsl,
     trustProxy: env.TRUST_PROXY === 'true',
