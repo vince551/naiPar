@@ -52,7 +52,7 @@ export function createApp({ pool, config, hashPassphrase }) {
   const childRegistrationLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 5,
-    standardHeaders: true,
+    standardHeaders: 'draft-8',
     legacyHeaders: false,
     message: {
       error: {
