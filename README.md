@@ -25,9 +25,9 @@ npm run build
 ```
 
 ## Important implementation status
-This repository currently contains a **frontend demonstration**, not a live Assembly service. Sign-in is simulated; sample delegates, agenda items, motions and status counts are illustrative. Form submissions are held only in the current browser session. There is no connected database, secure authentication, verified delegate register, real attendance, binding voting, or stakeholder messaging.
+The React application remains a **frontend demonstration**: sign-in is simulated; sample delegates, agenda items, motions and status counts are illustrative; and browser form submissions are not sent to a server. The separate `backend/` directory now contains an early Node.js/PostgreSQL API foundation and a pending child-registration request endpoint, but it is not connected to this frontend. There is still no login/session service, verified guardian consent, verified delegate register, live attendance, binding voting, or stakeholder messaging.
 
-Do not enter real children's personal information or safeguarding disclosures. Before production use, implement secure authentication and role-based access, data minimisation, consent and retention controls, moderation, audit logs, accessibility testing, and a restricted safeguarding workflow handled by trained and authorised personnel. Safeguarding disclosures must never be routed to public forums or ordinary moderation.
+Do not enter real children's personal information or safeguarding disclosures. Before production use, complete independent guardian verification, secure session authentication, role/resource authorisation, data minimisation, consent and retention controls, moderation, audit logging, accessibility testing, and a restricted safeguarding workflow handled by trained and authorised personnel. Safeguarding disclosures must never be routed to public forums or ordinary moderation.
 
 Formal parliamentary procedures and standing orders must be checked against the applicable approved governance documents. This independent project does not claim government endorsement, does not replace recognised county or national children's assembly structures, and cannot compel stakeholder action.
 
