@@ -137,6 +137,6 @@ A public child must not access the official hall or vote. A stakeholder must not
 
 ## Verification status
 
-The automated unit suite uses synthetic fixtures and fake database connections. It tests validation, phone normalisation, AES-GCM encryption/tamper rejection, atomic registration rollback and role guards.
+The automated unit suite uses synthetic fixtures and fake database connections. It tests validation, phone normalisation, AES-GCM encryption/tamper rejection, atomic registration rollback, role guards, migration transaction handling and checksum-drift detection.
 
 The SQL migrations have **not** been executed against PostgreSQL in this run because no database server or connection is configured. The API has not been deployed or connected to the frontend. Passing unit tests does not establish production readiness.
