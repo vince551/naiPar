@@ -1,5 +1,6 @@
 import {
   createCipheriv,
+  createDecipheriv,
   createHmac,
   randomBytes
 } from 'node:crypto';
@@ -50,6 +51,21 @@ export function createFieldCrypto({
     return Buffer.concat([Buffer.from([1]), iv, tag, ciphertext]);
   }
 
+  function decryptField(envelope) {
+    if (!Buffer.isBuffer(envelope) || envelope.length < 30 || envelope[0] !== 1) {
+      throw new Error('Encrypted field format is invalid or unsupported');
+    }
+    const iv = envelope.subarray(1, 13);
+    const tag = envelope.subarray(13, 29);
+    const ciphertext = envelope.subarray(29);
+    const decipher = createDecipheriv('aes-256-gcm', encryptionKey, iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([
+      decipher.update(ciphertext),
+      decipher.final()
+    ]).toString('utf8');
+  }
+
   function hashGuardianPhone(normalizedPhone) {
     return createHmac('sha256', lookupKey)
       .update(normalizedPhone, 'utf8')
@@ -64,6 +80,7 @@ export function createFieldCrypto({
 
   return Object.freeze({
     encryptField,
+    decryptField,
     hashGuardianPhone,
     fingerprintNetworkAddress
   });
