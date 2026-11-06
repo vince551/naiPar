@@ -7,10 +7,10 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
+    "start": "node --env-file=.env src/server.js",
+    "dev": "node --env-file=.env --watch src/server.js",
     "test": "node --test",
-    "check": "node --check src/server.js && node --check src/app.js && node --check src/domain/child-registration.js && node --check src/security/field-crypto.js && node --check src/security/authorization.js && node --check src/db/migrate.js"
+    "check": "node --check src/server.js && node --check src/app.js && node --check src/config.js && node --check src/domain/child-registration.js && node --check src/security/field-crypto.js && node --check src/security/phone.js && node --check src/security/authorization.js && node --check src/db/pool.js && node --check src/db/migrate.js"
   },
   "dependencies": {
     "argon2": "^0.44.0",
