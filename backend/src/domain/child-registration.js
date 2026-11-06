@@ -113,7 +113,8 @@ export function createChildRegistrationService({
     const encryptedFullName = fieldCrypto.encryptField(input.fullName);
     const encryptedSchool = fieldCrypto.encryptField(input.school);
     const encryptedGuardianName = fieldCrypto.encryptField(input.guardianName);
-    const encryptedGuardianPhone = fieldCrypto.encryptField(input.guardianPhone);
+    const encryptedUserGuardianPhone = fieldCrypto.encryptField(input.guardianPhone);
+    const encryptedConsentGuardianPhone = fieldCrypto.encryptField(input.guardianPhone);
 
     const client = await pool.connect();
     let committed = false;
@@ -146,7 +147,7 @@ export function createChildRegistrationService({
           input.county,
           input.ward,
           phoneLookupHash,
-          encryptedGuardianPhone,
+          encryptedUserGuardianPhone,
           passphraseHash
         ]
       );
@@ -169,7 +170,7 @@ export function createChildRegistrationService({
           userId,
           encryptedGuardianName,
           phoneLookupHash,
-          encryptedGuardianPhone,
+          encryptedConsentGuardianPhone,
           consentNoticeVersion.trim()
         ]
       );
