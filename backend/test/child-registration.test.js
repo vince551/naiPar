@@ -6,6 +6,7 @@ import {
   validateChildRegistration
 } from '../src/domain/child-registration.js';
 import { normalizeKenyanPhone } from '../src/security/phone.js';
+import { createFieldCrypto } from '../src/security/field-crypto.js';
 import { requireAuthenticated, requireRoles } from '../src/security/authorization.js';
 
 const validInput = () => ({
@@ -69,6 +70,27 @@ function createResponse() {
     json(body) { this.body = body; return this; }
   };
 }
+
+
+test('encrypts identity fields with authenticated encryption and detects tampering', () => {
+  const crypto = createFieldCrypto({
+    encryptionKey: Buffer.alloc(32, 7),
+    guardianPhoneLookupPepper: 'lookup-pepper-for-tests-32-bytes',
+    auditFingerprintPepper: 'audit-pepper-for-tests-32-bytes!'
+  });
+
+  const encrypted = crypto.encryptField('Synthetic Guardian');
+  assert.notEqual(encrypted.toString('utf8'), 'Synthetic Guardian');
+  assert.equal(crypto.decryptField(encrypted), 'Synthetic Guardian');
+  assert.deepEqual(
+    crypto.hashGuardianPhone('+254712345678'),
+    crypto.hashGuardianPhone('+254712345678')
+  );
+
+  const tampered = Buffer.from(encrypted);
+  tampered[tampered.length - 1] ^= 1;
+  assert.throws(() => crypto.decryptField(tampered));
+});
 
 test('normalises Kenyan mobile formats to E.164', () => {
   assert.equal(normalizeKenyanPhone('0712 345 678'), '+254712345678');
