@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 const MIGRATIONS_DIRECTORY = fileURLToPath(
   new URL('../../database/migrations/', import.meta.url)
@@ -20,7 +21,7 @@ export function stripMigrationEnvelope(sql, filename = 'unknown.sql') {
   return header + '\n' + body;
 }
 
-export async function runMigrations(pool) {
+export async function runMigrations(pool, { migrationsDirectory = MIGRATIONS_DIRECTORY } = {}) {
   const client = await pool.connect();
   const applied = [];
 
@@ -32,13 +33,12 @@ export async function runMigrations(pool) {
       'applied_at TIMESTAMPTZ NOT NULL DEFAULT now())'
     );
 
-    const filenames = (await readdir(MIGRATIONS_DIRECTORY))
+    const filenames = (await readdir(migrationsDirectory))
       .filter(name => /^\d{4}_[a-z0-9_]+\.sql$/.test(name))
       .sort();
 
     for (const filename of filenames) {
-      const migrationUrl = new URL(filename, new URL('../../database/migrations/', import.meta.url));
-      const sql = await readFile(migrationUrl, 'utf8');
+      const sql = await readFile(join(migrationsDirectory, filename), 'utf8');
       const checksum = createHash('sha256').update(sql).digest('hex');
       const existing = await client.query(
         'SELECT checksum FROM schema_migrations WHERE version = $1',
