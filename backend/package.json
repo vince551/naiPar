@@ -1,0 +1,22 @@
+{
+  "name": "sauti-yetu-api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test",
+    "check": "node --check src/server.js && node --check src/app.js && node --check src/domain/child-registration.js && node --check src/security/field-crypto.js && node --check src/security/authorization.js && node --check src/db/migrate.js"
+  },
+  "dependencies": {
+    "argon2": "^0.44.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
+    "pg": "^8.16.3"
+  }
+}
