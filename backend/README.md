@@ -103,11 +103,11 @@ Expected JSON fields:
 - `guardianPhone` (Kenyan mobile format)
 - `passphrase` (at least three words, 12–120 characters)
 
-The server selects the consent-notice version from `CONSENT_NOTICE_VERSION`; clients cannot choose an arbitrary consent text version.
+The server selects the consent-notice version identifier from `CONSENT_NOTICE_VERSION`; clients cannot choose an arbitrary version. This identifier must be aligned with the actual child-friendly notice approved by the responsible organisation. The notice text is not yet stored or served by this API.
 
 A successful request returns HTTP 202 with a registration request ID and both statuses set to `pending`. The submitted passphrase is hashed with Argon2id. Child name, school, guardian name and guardian phone are encrypted with AES-256-GCM. The normalised guardian phone is also HMAC-hashed for lookup. The transaction writes the user, pending consent and audit event together; any failure rolls all three back.
 
-**A checkbox or API request does not prove guardian consent.** The child account remains inactive. No OTP is sent or verified yet, and no login session is issued.
+**A checkbox or API request does not prove guardian consent.** The child account remains inactive. No OTP is sent or verified yet, no consent document is collected, and no login session is issued.
 
 The endpoint is rate-limited to five requests per IP in 15 minutes using the default in-memory limiter. This is a basic single-instance control, not a distributed abuse-prevention solution.
 
