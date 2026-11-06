@@ -7,13 +7,17 @@ const MIGRATIONS_DIRECTORY = fileURLToPath(
 );
 const MIGRATION_LOCK_ID = 918202611;
 
-function migrationBody(sql, filename) {
-  const withoutBegin = sql.replace(/^\s*BEGIN\s*;\s*/i, '');
-  const withoutCommit = withoutBegin.replace(/\s*COMMIT\s*;\s*$/i, '');
-  if (withoutBegin === sql || withoutCommit === withoutBegin) {
+export function stripMigrationEnvelope(sql, filename = 'unknown.sql') {
+  const begin = /\\bBEGIN\\s*;/i.exec(sql);
+  const commit = /\\bCOMMIT\\s*;\\s*$/i.exec(sql);
+  if (!begin || !commit || begin.index >= commit.index) {
     throw new Error(`Migration ${filename} must have one outer BEGIN/COMMIT pair`);
   }
-  return withoutCommit;
+
+  // Keep header comments; the runner owns the transaction boundary.
+  const header = sql.slice(0, begin.index);
+  const body = sql.slice(begin.index + begin[0].length, commit.index);
+  return `${header}\\n${body}`;
 }
 
 export async function runMigrations(pool) {
@@ -31,7 +35,7 @@ export async function runMigrations(pool) {
     `);
 
     const filenames = (await readdir(MIGRATIONS_DIRECTORY))
-      .filter(name => /^\d{4}_[a-z0-9_]+\.sql$/.test(name))
+      .filter(name => /^\\d{4}_[a-z0-9_]+\\.sql$/.test(name))
       .sort();
 
     for (const filename of filenames) {
@@ -51,7 +55,7 @@ export async function runMigrations(pool) {
 
       await client.query('BEGIN');
       try {
-        await client.query(migrationBody(sql, filename));
+        await client.query(stripMigrationEnvelope(sql, filename));
         await client.query(
           'INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2)',
           [filename, checksum]
