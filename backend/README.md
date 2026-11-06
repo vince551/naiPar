@@ -10,7 +10,7 @@ This branch adds the first runnable API foundation and a narrowly scoped child-r
 
 - Isolated Node.js 22+ API package under `backend/`.
 - Express API with Helmet security headers, bounded JSON bodies, request IDs and safe error responses.
-- PostgreSQL connection pool and a checksum-verified migration runner protected by an advisory lock.
+- PostgreSQL connection pool and a separate, checksum-verified migration command protected by an advisory lock; the API runtime does not apply DDL.
 - AES-256-GCM field encryption for child name, school and guardian identity/contact fields.
 - HMAC-SHA-256 guardian-phone lookup digest and network-address fingerprinting; raw guardian phone is not used as a database lookup key.
 - Argon2id passphrase hashing.
@@ -58,7 +58,7 @@ Migrations in `database/migrations/` are applied in numeric order:
 | `0004_encrypted_identity_fields.sql` | Encrypted identity/contact columns, removal of plaintext identity writes and support for multiple children under one guardian phone |
 | `0005_accountability_integrity.sql` | Restricts deletion of audit actors, binds stakeholder updates to their actual assignment and makes stakeholder updates append-only |
 
-The migration runner wraps each migration and its checksum record in one transaction. It uses a PostgreSQL advisory lock to avoid concurrent migration runs and refuses to continue if an already-applied migration's checksum changes.
+The migration runner wraps each migration and its checksum record in one transaction. It uses a PostgreSQL advisory lock to avoid concurrent migration runs and refuses to continue if an already-applied migration's checksum changes. It runs as a separate command so the API process does not need schema-owner privileges.
 
 **Important:** migration 0004 intentionally rejects legacy plaintext identity rows. Use a new, empty development database for this initial implementation. Do not apply it to a populated database without a reviewed data migration, backup and recovery plan.
 
@@ -76,6 +76,7 @@ cp .env.example .env
 npm install
 npm test
 npm run check
+npm run migrate
 npm start
 ```
 
@@ -85,7 +86,7 @@ For the encryption key, generate 32 random bytes and base64-encode them, for exa
 openssl rand -base64 32
 ```
 
-Generate the lookup and audit peppers separately with a cryptographically secure random generator. Keep `.env` out of source control. In production, use a managed secret store and managed database encryption; do not bake secrets into an image or frontend environment.
+Generate the lookup and audit peppers separately with a cryptographically secure random generator. Keep `.env` out of source control. In production, use a managed secret store and managed database encryption; do not bake secrets into an image or frontend environment. Give the API runtime database user only the required application DML permissions. Run `npm run migrate` with a separate privileged `MIGRATION_DATABASE_URL`; production migrations refuse to fall back to the runtime URL.
 
 ## API: child registration request
 
