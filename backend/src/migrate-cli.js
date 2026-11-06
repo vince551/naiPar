@@ -4,8 +4,11 @@ import { runMigrations } from './db/migrate.js';
 
 async function migrate() {
   const config = readConfig();
-  if (config.nodeEnv === 'production' && !config.migrationDatabaseUrl) {
-    throw new Error('MIGRATION_DATABASE_URL is required for production migrations');
+  if (
+    config.nodeEnv === 'production' &&
+    (!config.migrationDatabaseUrl || config.migrationDatabaseUrl === config.databaseUrl)
+  ) {
+    throw new Error('Production migrations require a separate MIGRATION_DATABASE_URL');
   }
 
   const pool = createDatabasePool({
