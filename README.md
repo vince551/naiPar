@@ -33,3 +33,8 @@ Formal parliamentary procedures and standing orders must be checked against the 
 
 ## Project identity
 MCCeAS means **Mombasa County Children E-Assembly**. “Sauti Yetu” is the platform experience name.
+
+
+## Backend development status
+
+The API is an early development foundation, not a production Assembly service. See [backend/README.md](backend/README.md) for local setup, migration instructions, the implemented pending-registration flow, tests and security limitations. Do not enter real children's information until independent guardian verification, session authentication, safeguarding workflows and production security review are complete.
