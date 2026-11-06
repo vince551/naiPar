@@ -11,6 +11,10 @@ async function start() {
     // The runtime database role needs application DML only. Schema changes
     // are performed separately by the migration command and a migration role.
     await pool.query('SELECT 1');
+    const schemaCheck = await pool.query("SELECT to_regclass('public.users') AS users_table");
+    if (!schemaCheck.rows[0]?.users_table) {
+      throw new Error('Database migrations have not been applied');
+    }
 
     const app = createApp({
       pool,
