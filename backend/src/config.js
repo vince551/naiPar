@@ -37,6 +37,7 @@ export function readConfig(env = process.env) {
     nodeEnv,
     port,
     databaseUrl,
+    migrationDatabaseUrl: env.MIGRATION_DATABASE_URL?.trim() || null,
     databaseSsl,
     trustProxy: env.TRUST_PROXY === 'true',
     consentNoticeVersion: required(env, 'CONSENT_NOTICE_VERSION'),
