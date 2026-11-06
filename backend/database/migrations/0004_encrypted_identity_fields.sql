@@ -25,6 +25,7 @@ ALTER TABLE users
     full_name IS NULL
     AND full_name_ciphertext IS NOT NULL
     AND school IS NULL
+    AND school_ciphertext IS NOT NULL
   );
 
 ALTER TABLE users
