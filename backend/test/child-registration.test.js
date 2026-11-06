@@ -90,6 +90,8 @@ test('encrypts identity fields with authenticated encryption and detects tamperi
   });
 
   const encrypted = crypto.encryptField('Synthetic Guardian');
+  const encryptedAgain = crypto.encryptField('Synthetic Guardian');
+  assert.notDeepEqual(encrypted, encryptedAgain);
   assert.notEqual(encrypted.toString('utf8'), 'Synthetic Guardian');
   assert.equal(crypto.decryptField(encrypted), 'Synthetic Guardian');
   assert.deepEqual(
