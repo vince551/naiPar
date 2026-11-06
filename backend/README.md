@@ -1,128 +1,140 @@
-# Sauti Yetu backend foundation
+# Sauti Yetu backend
 
-## Current implementation status
+## Current state
 
-The repository began as a React 18 + Vite frontend demonstration. The current sign-in and registration interactions are simulated; there is no deployed API, database connection, real authentication, verified delegate registry, live attendance, binding vote, or stakeholder messaging.
+The repository's frontend remains a React 18 + Vite demonstration. The navy-and-gold MCCeAS / Sauti Yetu interface and all existing frontend files are unchanged by this backend branch.
 
-This branch introduces a PostgreSQL data model and implementation/security guidance. It does **not** make the frontend forms secure or production-ready.
+This branch adds the first runnable API foundation and a narrowly scoped child-registration request endpoint. It does **not** provide a complete or production-ready Assembly service.
 
-## Architecture decision
+### Implemented in this branch
 
-Use a separately deployed Node.js API (Express or Fastify) with PostgreSQL. Keep the existing Vite frontend as the client. Use parameterised SQL through a small repository/data-access layer; avoid exposing database credentials to Vite/browser code.
+- Isolated Node.js 22+ API package under `backend/`.
+- Express API with Helmet security headers, bounded JSON bodies, request IDs and safe error responses.
+- PostgreSQL connection pool and a checksum-verified migration runner protected by an advisory lock.
+- AES-256-GCM field encryption for child name, school and guardian identity/contact fields.
+- HMAC-SHA-256 guardian-phone lookup digest and network-address fingerprinting; raw guardian phone is not used as a database lookup key.
+- Argon2id passphrase hashing.
+- `POST /api/v1/auth/child/registration-requests`: creates a pending child account and pending guardian-consent record in one database transaction.
+- Five-attempt / 15-minute in-memory rate limit on child registration.
+- Reusable server-context role guards that deny child/delegate access until guardian consent is approved.
+- Unit tests for validation, encryption/tamper detection, transactional rollback, pending consent and role checks.
 
+### Not implemented yet
+
+- Guardian SMS/OTP or equivalent independent consent verification.
+- Login, logout, session creation/resolution, recovery or adult account registration.
+- A coordinator review/approval workflow.
+- A production-ready role/session middleware integration. The role guards require a trusted `req.auth` object from a future server-side session resolver; no client-provided role is accepted.
+- Public concern, official sitting, motion, debate, voting, resolution or stakeholder API endpoints.
+- Frontend API integration. The current React login and registration remain clearly labelled demonstration flows.
+- A live PostgreSQL environment, deployment, backup/restore or production security review.
+
+Do not collect real children's information through this API until guardian verification, session authentication, access control, safeguarding procedures and deployment controls are complete.
+
+## Architecture
+
+- Runtime: Node.js 22+
+- HTTP: Express 5
 - Database: PostgreSQL 15+
-- API: Node.js LTS, Express or Fastify
-- Validation: Zod at every API boundary
-- Passwords/passphrases: Argon2id, unique salt per credential
-- Sessions: opaque random tokens; store only a cryptographic hash server-side; secure, HttpOnly, SameSite cookies
-- File uploads: private object storage, random object keys, MIME/size validation, malware scanning where available
-- Video: Jitsi integration only after server-side session/room authorisation
-- PDFs: generated server-side from persisted sitting/vote/resolution records
-- Deployment: API and database separate from the static frontend; HTTPS everywhere
+- Database driver: `pg`
+- Child passphrase hashing: Argon2id
+- Field encryption: AES-256-GCM using a dedicated 32-byte key
+- Guardian lookup: HMAC-SHA-256 using a separate server-side pepper
+- Security headers: Helmet
+- Request validation: explicit server-side validation in the domain service
+- Deployment model: separate API/database from the static Vite frontend; place both behind HTTPS
 
-No credentials, encryption keys, guardian phone numbers, or child records belong in source control, Vite environment variables, public buckets, or client-side storage.
+The API does not enable permissive CORS. Prefer a same-origin reverse proxy. If a separate API origin is selected later, add an explicit origin allowlist; never use wildcard credentialed CORS.
 
-## Data model
+## Database model
 
-Migrations in `database/migrations/` are applied in numeric order. `0001_initial_schema.sql` creates the core model and restricted projections; `0002_auth_sessions.sql` adds hashed sessions, login-attempt records and timestamp triggers; `0003_audit_integrity.sql` makes audit rows append-only and cast votes immutable. They create:
+Migrations in `database/migrations/` are applied in numeric order:
 
-| Area | Tables |
+| Migration | Purpose |
 |---|---|
-| Identity and consent | `users`, `guardian_consents` |
-| Assembly operations | `sittings`, `sitting_attendance`, `motions`, `debate_requests`, `motion_amendments`, `votes` |
-| Public participation | `concerns`, `concern_comments` |
-| Accountability | `resolutions`, `stakeholder_assignments`, `stakeholder_updates` |
-| Oversight | `audit_logs` |
-| Restricted projections | `stakeholder_resolution_summary`, `public_concern_summary` |
+| `0001_initial_schema.sql` | Users, guardian consents, sittings, attendance, motions, debates, amendments, votes, concerns, resolutions, stakeholder assignments/updates, audit log and restricted projections |
+| `0002_auth_sessions.sql` | Hashed session records, login-attempt records and updated-at triggers |
+| `0003_audit_integrity.sql` | Append-only audit and immutable vote triggers |
+| `0004_encrypted_identity_fields.sql` | Encrypted identity/contact columns, removal of plaintext identity writes and support for multiple children under one guardian phone |
 
-Use UUIDs for externally exposed record identifiers. Foreign keys use restrictive deletion for official records so a user cannot silently erase an adopted motion, vote, consent decision, or resolution.
+The migration runner wraps each migration and its checksum record in one transaction. It uses a PostgreSQL advisory lock to avoid concurrent migration runs and refuses to continue if an already-applied migration's checksum changes.
 
-## Authentication and account lifecycle
+**Important:** migration 0004 intentionally rejects legacy plaintext identity rows. Use a new, empty development database for this initial implementation. Do not apply it to a populated database without a reviewed data migration, backup and recovery plan.
 
-### Child and delegate accounts
+## Local development
 
-1. A guardian provides consent using a reviewed, versioned consent notice.
-2. A child profile is created in `pending` status.
-3. The guardian phone is normalised server-side. Store its encrypted value only if operationally required, and store an HMAC-SHA-256 lookup digest using a server-side pepper for account lookup. Never store a plaintext phone as the login key.
-4. Store a passphrase hash generated with Argon2id. Never log, email, or retain the three words.
-5. A trained/authorised coordinator reviews the consent record. Only an approved consent can activate the child account.
-6. A delegate upgrade changes the existing account's role after an authorised coordinator verifies the election/appointment and consent evidence. It must not create a duplicate account or reset credentials.
-7. Guardian-initiated recovery must use a separately verified process. Do not implement a weak “phone number only” reset.
+1. Install Node.js 22 or newer and PostgreSQL 15 or newer.
+2. Create an empty local development database.
+3. Copy `.env.example` to `.env` in this directory.
+4. Replace the sample database URL and every secret placeholder. Generate independent random values; do not reuse a password as an encryption key or pepper.
+5. Install dependencies and run the tests.
 
-Picture passphrases are an accessibility alternative to the same secret, not a second factor. Their mapping must be private and the server must verify the same secret hash; never reveal the selected sequence in logs or analytics.
+```bash
+cd backend
+cp .env.example .env
+npm install
+npm test
+npm run check
+npm start
+```
 
-### Adult accounts
+For the encryption key, generate 32 random bytes and base64-encode them, for example:
 
-Adults use a verified work email and Argon2id password hash. Stakeholder accounts remain pending until an administrator verifies organisation and authority documents. Role changes require explicit audit events.
+```bash
+openssl rand -base64 32
+```
 
-### Sessions and abuse controls
+Generate the lookup and audit peppers separately with a cryptographically secure random generator. Keep `.env` out of source control. In production, use a managed secret store and managed database encryption; do not bake secrets into an image or frontend environment.
 
-- Generate high-entropy opaque session tokens; persist only token hashes.
-- Rotate session IDs after login and privilege changes.
-- Use Secure, HttpOnly, SameSite cookies, CSRF protection for cookie-authenticated mutations, short idle expiry, absolute expiry, and revocation on logout.
-- Rate-limit login and recovery by account lookup digest and network fingerprint; use progressive delays and generic error messages to prevent account enumeration.
-- Do not use localStorage for authentication tokens.
-- Never trust a role supplied by the browser.
+## API: child registration request
 
-## Authorisation matrix
+`POST /api/v1/auth/child/registration-requests`
 
-Enforce authorisation in API middleware and again in the service/data-access layer. Hiding a button in React is not access control.
+Expected JSON fields:
 
-| Role | Permitted scope |
-|---|---|
-| Public child | Public forums, own submissions, published public outcomes |
-| Delegate | Public child scope plus assigned official sittings, attendance, debate requests and one vote per eligible motion |
-| Speaker | Delegate scope plus presiding controls, speaker queue and debate approvals |
-| Clerk | Sitting/order-paper/motion/official-record administration |
-| Coordinator | Consent review, delegate verification, concern triage and authorised escalation |
-| Stakeholder | Only resolutions explicitly assigned to that stakeholder; updates on those assignments |
-| Admin | Account and configuration administration; sensitive child records remain need-to-know and audited |
+- `fullName`
+- `age` (5–17)
+- `school`
+- `county`
+- `ward`
+- `guardianName`
+- `guardianPhone` (Kenyan mobile format)
+- `passphrase` (at least three words, 12–120 characters)
 
-A public child cannot enter the official hall or vote. A stakeholder cannot query users, guardian consent records, individual child profiles, or raw concerns. Stakeholder access is scoped by an active `stakeholder_assignments` row. The supplied SQL views are projections, not a replacement for per-request authorisation.
+The server selects the consent-notice version from `CONSENT_NOTICE_VERSION`; clients cannot choose an arbitrary consent text version.
 
-## Child safeguarding and privacy requirements
+A successful request returns HTTP 202 with a registration request ID and both statuses set to `pending`. The submitted passphrase is hashed with Argon2id. Child name, school, guardian name and guardian phone are encrypted with AES-256-GCM. The normalised guardian phone is also HMAC-hashed for lookup. The transaction writes the user, pending consent and audit event together; any failure rolls all three back.
 
-- Collect only fields needed for participation and eligibility. Make gender optional.
-- Keep safeguarding disclosures out of public forums, ordinary comments, stakeholder views and general moderation queues. A dedicated restricted workflow must be designed with trained safeguarding personnel before collecting such disclosures.
-- Public concerns must be moderated and explicitly published. Never publish a child's name, guardian contact, school-level identifying detail, or unredacted narrative by default.
-- Stakeholders receive only the minimum information needed to act, normally a de-identified issue summary and geographic area.
-- Encrypt guardian contact details and consent documents at rest with managed keys; keep keys outside the database and repository.
-- Define retention, correction, withdrawal, deletion and legal-hold procedures before production.
-- Audit sensitive reads as well as writes. Do not put passwords, passphrases, access tokens, full phone numbers, consent document contents, or unredacted child narratives in audit metadata.
-- Provide a clear child-friendly privacy notice and accessible consent process.
-- Review compliance with Kenya's Data Protection Act, 2019 and applicable children's data requirements with qualified counsel/data-protection personnel before launch.
+**A checkbox or API request does not prove guardian consent.** The child account remains inactive. No OTP is sent or verified yet, and no login session is issued.
 
-## Parliamentary integrity
+The endpoint is rate-limited to five requests per IP in 15 minutes using the default in-memory limiter. This is a basic single-instance control, not a distributed abuse-prevention solution.
 
-- Enforce one vote per eligible delegate per motion with the database unique constraint.
-- Validate delegate eligibility and sitting/motion voting windows on the server inside a transaction.
-- Derive vote totals from persisted votes; never accept client-supplied totals or a client-side “passed” flag.
-- Confirm the applicable standing orders before implementing quorum, majority, abstention and tie rules. The example “more than 50% Yes” is not yet a verified legal/procedural rule.
-- Record attendance, speaking approvals, amendments, vote events and resolution approval in an append-only audit trail.
-- A generated Hansard/PDF must be reproducible from persisted records and clearly marked draft until authorised approval.
+## Role and privacy boundaries
 
-## Suggested API slices
+The reusable role guards accept only an authentication context populated by a future server-side session resolver. They do not trust role names from request data or headers.
 
-1. `POST /auth/child/register` — pending child profile; guardian consent workflow; never activates without approved consent.
-2. `POST /auth/login`, `POST /auth/logout`, `POST /auth/recovery` — session lifecycle and rate limiting.
-3. `POST /coordinator/children/:id/verify-delegate` — audited role upgrade on the existing account.
-4. `GET/POST /public/concerns` — moderated public participation with safeguarding routing separated.
-5. `GET/POST /clerk/sittings`, `GET/POST /clerk/motions` — authorised sitting administration.
-6. `POST /motions/:id/debate-requests`, `POST /debate-requests/:id/decision` — queue management.
-7. `POST /motions/:id/votes` — transactionally validated, unique vote.
-8. `GET /stakeholder/assignments`, `POST /stakeholder/assignments/:id/updates` — assignment-scoped accountability.
+- Public children: public participation and their own permitted submissions only.
+- Delegates: official participation only after delegate verification and approved guardian consent.
+- Speaker/clerk: narrowly scoped presiding and record-management functions.
+- Coordinator: consent and delegate verification, subject to audit.
+- Stakeholder: only assigned, de-identified resolution work.
+- Admin: account/configuration administration; child data remains need-to-know and audited.
 
-## Verification checklist before production
+A public child must not access the official hall or vote. A stakeholder must not access user profiles, guardian contacts, consent documents or raw child submissions. Hiding UI controls is not authorisation.
 
-- Apply migrations to a disposable PostgreSQL database and run schema/migration tests.
-- Unit-test role and resource-level access for every endpoint, including negative tests.
-- Test guardian consent pending/approved/withdrawn transitions and delegate upgrade.
-- Test account enumeration resistance, rate limits, session rotation, CSRF and revocation.
-- Test concurrent duplicate votes and voting-window boundaries.
-- Verify public/stakeholder SQL projections cannot expose child identities or restricted narratives.
-- Run dependency, secret, static-analysis and vulnerability scans.
-- Complete privacy impact assessment, safeguarding review, accessibility testing, backup/restore test and incident-response plan.
+## Safeguarding and operational requirements
 
-## Not yet implemented
+- Do not collect abuse disclosures in public forums or this registration endpoint.
+- Use a separate, restricted safeguarding workflow designed with trained child-protection personnel.
+- Do not publish names, phone numbers, school identifiers or unredacted narratives by default.
+- Encrypt sensitive identity fields and private consent files; keep encryption keys separate from the database.
+- Audit sensitive reads and writes without recording credentials, phone numbers or unredacted child content.
+- Define consent withdrawal, correction, retention, deletion and legal-hold processes.
+- Review the Kenya Data Protection Act, 2019 and applicable children's data obligations with qualified data-protection and safeguarding personnel before launch.
+- Confirm Assembly standing orders before implementing quorum, voting eligibility, majority, abstention and tie rules.
 
-No API server, database connection, migrations runner, authentication/session endpoint, consent verification endpoint, Jitsi integration, PDF pipeline or production secrets are configured by this commit. Do not connect real child data until these controls have been implemented and independently reviewed.
+## Verification status
+
+The automated unit suite uses synthetic fixtures and fake database connections. It tests validation, phone normalisation, AES-GCM encryption/tamper rejection, atomic registration rollback and role guards.
+
+The SQL migrations have **not** been executed against PostgreSQL in this run because no database server or connection is configured. The API has not been deployed or connected to the frontend. Passing unit tests does not establish production readiness.
