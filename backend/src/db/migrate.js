@@ -8,16 +8,16 @@ const MIGRATIONS_DIRECTORY = fileURLToPath(
 const MIGRATION_LOCK_ID = 918202611;
 
 export function stripMigrationEnvelope(sql, filename = 'unknown.sql') {
-  const begin = /\\bBEGIN\\s*;/i.exec(sql);
-  const commit = /\\bCOMMIT\\s*;\\s*$/i.exec(sql);
+  const begin = /\bBEGIN\s*;/i.exec(sql);
+  const commit = /\bCOMMIT\s*;\s*$/i.exec(sql);
   if (!begin || !commit || begin.index >= commit.index) {
-    throw new Error(`Migration ${filename} must have one outer BEGIN/COMMIT pair`);
+    throw new Error('Migration ' + filename + ' must have one outer BEGIN/COMMIT pair');
   }
 
   // Keep header comments; the runner owns the transaction boundary.
   const header = sql.slice(0, begin.index);
   const body = sql.slice(begin.index + begin[0].length, commit.index);
-  return `${header}\\n${body}`;
+  return header + '\n' + body;
 }
 
 export async function runMigrations(pool) {
@@ -26,20 +26,19 @@ export async function runMigrations(pool) {
 
   try {
     await client.query('SELECT pg_advisory_lock($1::bigint)', [MIGRATION_LOCK_ID]);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS schema_migrations (
-        version TEXT PRIMARY KEY,
-        checksum TEXT NOT NULL,
-        applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )
-    `);
+    await client.query(
+      'CREATE TABLE IF NOT EXISTS schema_migrations (' +
+      'version TEXT PRIMARY KEY, checksum TEXT NOT NULL, ' +
+      'applied_at TIMESTAMPTZ NOT NULL DEFAULT now())'
+    );
 
     const filenames = (await readdir(MIGRATIONS_DIRECTORY))
-      .filter(name => /^\\d{4}_[a-z0-9_]+\\.sql$/.test(name))
+      .filter(name => /^\d{4}_[a-z0-9_]+\.sql$/.test(name))
       .sort();
 
     for (const filename of filenames) {
-      const sql = await readFile(new URL(filename, `file://${MIGRATIONS_DIRECTORY}/`), 'utf8');
+      const migrationUrl = new URL(filename, new URL('../../database/migrations/', import.meta.url));
+      const sql = await readFile(migrationUrl, 'utf8');
       const checksum = createHash('sha256').update(sql).digest('hex');
       const existing = await client.query(
         'SELECT checksum FROM schema_migrations WHERE version = $1',
@@ -48,7 +47,7 @@ export async function runMigrations(pool) {
 
       if (existing.rowCount) {
         if (existing.rows[0].checksum !== checksum) {
-          throw new Error(`Applied migration checksum changed: ${filename}`);
+          throw new Error('Applied migration checksum changed: ' + filename);
         }
         continue;
       }
@@ -64,7 +63,7 @@ export async function runMigrations(pool) {
         applied.push(filename);
       } catch (error) {
         await client.query('ROLLBACK');
-        throw new Error(`Migration failed: ${filename}`, { cause: error });
+        throw new Error('Migration failed: ' + filename, { cause: error });
       }
     }
 
