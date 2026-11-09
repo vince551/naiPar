@@ -206,6 +206,11 @@ export function createAuthenticationService({
       );
 
       await client.query(
+        'INSERT INTO auth_attempts (network_fingerprint, succeeded) VALUES ($1, true)',
+        [networkFingerprint || null]
+      );
+
+      await client.query(
         `INSERT INTO audit_logs (
           actor_user_id,
           action,
@@ -268,7 +273,13 @@ export function createAuthenticationService({
       account = await findAdultAccount(input.identifier, input.secret);
     }
 
-    if (!account) throw new AuthenticationFailedError();
+    if (!account) {
+      await pool.query(
+        'INSERT INTO auth_attempts (network_fingerprint, succeeded) VALUES ($1, false)',
+        [context.networkFingerprint || null]
+      );
+      throw new AuthenticationFailedError();
+    }
 
     return createSession(account, { ...context, mode: input.mode });
   }
