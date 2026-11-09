@@ -27,7 +27,11 @@ function validateLogin(payload) {
 
   if (!['child', 'adult'].includes(mode)) fields.push('mode');
 
-  const secret = typeof input.secret === 'string' ? input.secret : '';
+  const rawSecret = typeof input.secret === 'string' ? input.secret : '';
+  // Match the exact whitespace normalisation used when child passphrases are registered.
+  const secret = mode === 'child'
+    ? rawSecret.trim().replace(/\\s+/gu, ' ')
+    : rawSecret;
   if (
     secret.length < 8 ||
     secret.length > 256 ||
