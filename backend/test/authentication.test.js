@@ -154,7 +154,9 @@ test('child login creates a hashed session only for an active account with appro
   );
   assert.ok(!sessionInsert.params.includes(result.sessionToken));
   assert.ok(!sessionInsert.params.includes(result.csrfToken));
-  assert.ok(pool.clientQueries.some(entry => entry.sql.includes('INSERT INTO auth_attempts') && entry.params[1] === true));
+  const successfulAttempt = pool.clientQueries.find(entry => entry.sql.includes('INSERT INTO auth_attempts'));
+  assert.ok(successfulAttempt?.sql.includes('VALUES ($1, true)'));
+  assert.equal(successfulAttempt.params.length, 1);
   assert.ok(pool.clientQueries.some(entry => entry.sql === 'COMMIT'));
   assert.equal(pool.released, true);
 });
@@ -254,7 +256,8 @@ test('unknown adult account performs dummy Argon2 verification and returns gener
   assert.equal(pool.connects, 0);
   const failedAttempt = pool.queries.find(entry => entry.sql.includes('INSERT INTO auth_attempts'));
   assert.ok(failedAttempt);
-  assert.equal(failedAttempt.params[1], false);
+  assert.ok(failedAttempt.sql.includes('VALUES ($1, false)'));
+  assert.equal(failedAttempt.params.length, 1);
   assert.ok(!failedAttempt.params.includes('unknown@example.org'));
 });
 
