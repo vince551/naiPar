@@ -183,6 +183,51 @@ export function createAuthenticationService({
     try {
       await client.query('BEGIN');
 
+      // Re-check account status, role and credential version under a row lock.
+      // This closes the gap between Argon2 verification and session issuance.
+      const lockedAccountResult = await client.query(
+        `SELECT
+          id,
+          role::text AS role,
+          status::text AS status,
+          passphrase_hash,
+          password_hash
+        FROM users
+        WHERE id = $1
+        FOR UPDATE`,
+        [account.id]
+      );
+      const lockedAccount = lockedAccountResult.rows?.[0];
+      const currentCredentialHash = mode === 'child'
+        ? lockedAccount?.passphrase_hash
+        : lockedAccount?.password_hash;
+
+      if (
+        !lockedAccount ||
+        lockedAccount.status !== 'active' ||
+        lockedAccount.role !== account.role ||
+        currentCredentialHash !== account.credential_hash ||
+        (mode === 'child' && !CHILD_ROLES.has(lockedAccount.role)) ||
+        (mode === 'adult' && CHILD_ROLES.has(lockedAccount.role))
+      ) {
+        throw new AuthenticationFailedError();
+      }
+
+      if (mode === 'child') {
+        const consentResult = await client.query(
+          `SELECT id
+           FROM guardian_consents
+           WHERE child_user_id = $1
+             AND status = 'approved'
+             AND withdrawn_at IS NULL
+           ORDER BY granted_at DESC NULLS LAST
+           LIMIT 1
+           FOR UPDATE`,
+          [account.id]
+        );
+        if (!consentResult.rows?.[0]) throw new AuthenticationFailedError();
+      }
+
       const sessionResult = await client.query(
         `INSERT INTO auth_sessions (
           user_id,
