@@ -13,18 +13,22 @@ This branch adds the first runnable API foundation and a narrowly scoped child-r
 - PostgreSQL connection pool and a separate, checksum-verified migration command protected by an advisory lock; the API runtime does not apply DDL.
 - AES-256-GCM field encryption for child name, school and guardian identity/contact fields.
 - HMAC-SHA-256 guardian-phone lookup digest and network-address fingerprinting; raw guardian phone is not used as a database lookup key.
-- Argon2id passphrase hashing.
+- Argon2id passphrase/password hashing and dummy-hash verification for unknown login identifiers.
 - `POST /api/v1/auth/child/registration-requests`: creates a pending child account and pending guardian-consent record in one database transaction.
-- Five-attempt / 15-minute in-memory rate limit on child registration.
+- `POST /api/v1/auth/login`: verifies child/delegate credentials against guardian-phone lookup plus passphrase, or adult work email plus password. Child sign-in is allowed only for an active account with approved, non-withdrawn consent.
+- Opaque 256-bit session tokens stored only as SHA-256 digests, issued in HttpOnly, SameSite=Lax cookies; Secure is enabled in production.
+- Eight-hour server-side sessions, revocation on logout or inactive account status, trusted database-backed role/consent context, and CSRF token validation for logout.
+- `GET /api/v1/auth/session` and `POST /api/v1/auth/logout`.
+- Five-attempt / 15-minute in-memory rate limit on child registration and ten-attempt / 15-minute in-memory rate limit on login.
 - Reusable server-context role guards that deny child/delegate access until guardian consent is approved.
-- Unit tests for validation, encryption/tamper detection, transactional rollback, pending consent and role checks.
+- Unit tests for validation, encryption/tamper detection, transactional rollback, pending consent, login, session cookies, CSRF and role checks.
 
 ### Not implemented yet
 
 - Guardian SMS/OTP or equivalent independent consent verification.
-- Login, logout, session creation/resolution, recovery or adult account registration.
-- A coordinator review/approval workflow.
-- A production-ready role/session middleware integration. The role guards require a trusted `req.auth` object from a future server-side session resolver; no client-provided role is accepted.
+- Guardian SMS/OTP or equivalent independent consent verification and the coordinator consent-review workflow.
+- Adult account provisioning/registration, password recovery, guardian-assisted child recovery, session listing/device management or MFA.
+- Resource-level API endpoints for sittings, motions, debates, votes, concerns, resolutions and stakeholder updates. The session resolver is present, but those business routes are not yet mounted.
 - Public concern, official sitting, motion, debate, voting, resolution or stakeholder API endpoints.
 - Frontend API integration. The current React login and registration remain clearly labelled demonstration flows.
 - A live PostgreSQL environment, deployment, backup/restore or production security review.
@@ -88,7 +92,7 @@ openssl rand -base64 32
 
 Generate the lookup and audit peppers separately with a cryptographically secure random generator. Keep `.env` out of source control. In production, use a managed secret store and managed database encryption; do not bake secrets into an image or frontend environment. Give the API runtime database user only the required application DML permissions and no schema-owner privileges. Deny it `UPDATE`, `DELETE` and `TRUNCATE` on append-only audit, vote and stakeholder-update tables; grant only the inserts and reads the API actually needs. Run `npm run migrate` with a separate privileged `MIGRATION_DATABASE_URL`; production migrations refuse to fall back to the runtime URL.
 
-## API: child registration request
+## API: authentication and child registration
 
 `POST /api/v1/auth/child/registration-requests`
 
@@ -109,11 +113,50 @@ A successful request returns HTTP 202 with a registration request ID and both st
 
 **A checkbox or API request does not prove guardian consent.** The child account remains inactive. No OTP is sent or verified yet, no consent document is collected, and no login session is issued.
 
-The endpoint is rate-limited to five requests per IP in 15 minutes using the default in-memory limiter. This is a basic single-instance control, not a distributed abuse-prevention solution.
+The registration endpoint is rate-limited to five requests per IP in 15 minutes. Login is limited to ten requests per IP in 15 minutes. Both use the default in-memory limiter: this is a basic single-instance control, not a distributed abuse-prevention solution. Production should use a shared rate-limit store and monitor abuse without logging credentials or raw identifiers.
+
+### Login
+
+`POST /api/v1/auth/login`
+
+Child/delegate request:
+
+```json
+{
+  "mode": "child",
+  "identifier": "0712345678",
+  "secret": "sample mango river"
+}
+```
+
+Adult request:
+
+```json
+{
+  "mode": "adult",
+  "identifier": "official@example.org",
+  "secret": "synthetic adult password"
+}
+```
+
+The response sets the opaque session token in an HttpOnly cookie and returns a CSRF token in the response body. The raw session token is never returned as JSON or stored in the database. Child login searches the guardian-phone HMAC digest and verifies the passphrase against matching child accounts. If a shared phone plus passphrase matches more than one child, login fails closed; households with multiple children should use distinct passphrases. Adult login normalises the email address and verifies the Argon2id password hash. Unknown adult identifiers incur a dummy Argon2id verification to reduce account-enumeration timing differences.
+
+A credential match is not enough: the account must be active, and child/delegate accounts must have an approved consent record that has not been withdrawn. Failure messages are deliberately generic.
+
+### Session and logout
+
+- Cookie name: `sauti_yetu_session`; flags: `HttpOnly; SameSite=Lax; Path=/`; `Secure` is added in production.
+- Session lifetime: eight hours. The database stores only SHA-256 hashes of the random session and CSRF tokens.
+- `GET /api/v1/auth/session` returns the authenticated user ID and role, never a client-supplied role.
+- `POST /api/v1/auth/logout` requires the `x-csrf-token` header and revokes the server-side session. The CSRF token is returned only at login; keep it in application memory, not localStorage.
+- A session is revoked when its account is no longer active. If guardian consent is withdrawn, child/delegate authorisation is denied on subsequent protected requests.
+- All future cookie-authenticated state-changing routes must use `requireSession`, `requireCsrf`, `requireAuthenticated` and the appropriate role/resource checks.
+
+The current frontend has not yet been connected to these endpoints. It still displays a demo sign-in and must not be used to collect real credentials.
 
 ## Role and privacy boundaries
 
-The reusable role guards accept only an authentication context populated by a future server-side session resolver. They do not trust role names from request data or headers. Until that session resolver exists and is tested, these guards are library code rather than active protection on business endpoints.
+The role guards accept only `req.auth` populated by the server-side session resolver. They do not trust role names from request data or headers. No business endpoint should be exposed until it is mounted behind session resolution, authentication, CSRF protection for mutations, and resource-level authorisation.
 
 - Public children: public participation and their own permitted submissions only.
 - Delegates: official participation only after delegate verification and approved guardian consent.
@@ -137,6 +180,6 @@ A public child must not access the official hall or vote. A stakeholder must not
 
 ## Verification status
 
-The automated unit suite uses synthetic fixtures and fake database connections. It tests validation, phone normalisation, AES-GCM encryption/tamper rejection, atomic registration rollback, role guards, migration transaction handling and checksum-drift detection.
+The automated unit suite uses synthetic fixtures and fake database connections. It tests validation, phone normalisation, AES-GCM encryption/tamper rejection, atomic registration rollback, role guards, migration transaction handling/checksum-drift detection, Argon2 verification paths, generic login failures, session-token hashing, cookie flags and CSRF checks.
 
 The SQL migrations have **not** been executed against PostgreSQL in this run because no database server or connection is configured. The API has not been deployed or connected to the frontend. Passing unit tests does not establish production readiness.
