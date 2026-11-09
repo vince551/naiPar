@@ -128,10 +128,37 @@ export function createApp({
 
   app.post('/api/v1/auth/login', loginLimiter, async (req, res, next) => {
     try {
+      const networkFingerprint = fieldCrypto.fingerprintNetworkAddress(req.ip);
       const result = await authentication.authenticate(req.body, {
         requestId: req.requestId,
-        networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        networkFingerprint
       });
+
+      // Revoke an existing browser session after new credentials are verified,
+      // preventing a shared device from silently retaining the previous account.
+      if (req.sessionId && req.auth?.userId) {
+        try {
+          await authentication.revokeSession({
+            sessionId: req.sessionId,
+            userId: req.auth.userId,
+            requestId: req.requestId,
+            networkFingerprint
+          });
+        } catch (error) {
+          // Do not leave an unissued replacement session active if rotation fails.
+          try {
+            await authentication.revokeSession({
+              sessionId: result.sessionId,
+              userId: result.userId,
+              requestId: req.requestId,
+              networkFingerprint
+            });
+          } catch {
+            // Preserve the original failure; expiry still bounds the orphaned session.
+          }
+          throw error;
+        }
+      }
 
       res.setHeader(
         'Set-Cookie',
