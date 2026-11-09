@@ -446,3 +446,61 @@ test('session middleware clears a cookie when the database account is suspended'
   assert.match(headers['Set-Cookie'], /Max-Age=0/u);
   assert.ok(calls.some(entry => entry.sql.startsWith('UPDATE auth_sessions')));
 });
+
+
+test('session issuance rechecks account status under a row lock', async () => {
+  const pool = createPool({
+    adultRow: {
+      id: 'synthetic-official',
+      role: 'coordinator',
+      status: 'active',
+      credential_hash: ADULT_HASH
+    },
+    lockedStatusOverride: 'suspended'
+  });
+  const service = createService(pool, async hash => hash === ADULT_HASH);
+
+  await assert.rejects(
+    service.authenticate({
+      mode: 'adult',
+      identifier: 'coordinator@example.org',
+      secret: 'synthetic adult password'
+    }),
+    AuthenticationFailedError
+  );
+  assert.ok(pool.clientQueries.some(entry => entry.sql.includes('FOR UPDATE')));
+  assert.ok(pool.clientQueries.some(entry => entry.sql === 'ROLLBACK'));
+  assert.equal(
+    pool.clientQueries.some(entry => entry.sql.includes('INSERT INTO auth_sessions')),
+    false
+  );
+});
+
+test('session issuance rechecks guardian consent under a row lock', async () => {
+  const pool = createPool({
+    childRows: [{
+      id: 'synthetic-child',
+      role: 'delegate',
+      status: 'active',
+      credential_hash: CHILD_HASH,
+      guardian_consent_approved: true
+    }],
+    lockedConsentApprovedOverride: false
+  });
+  const service = createService(pool, async hash => hash === CHILD_HASH);
+
+  await assert.rejects(
+    service.authenticate({
+      mode: 'child',
+      identifier: '0712345678',
+      secret: 'sample mango river'
+    }),
+    AuthenticationFailedError
+  );
+  assert.ok(pool.clientQueries.some(entry => entry.sql.includes('FROM guardian_consents')));
+  assert.ok(pool.clientQueries.some(entry => entry.sql === 'ROLLBACK'));
+  assert.equal(
+    pool.clientQueries.some(entry => entry.sql.includes('INSERT INTO auth_sessions')),
+    false
+  );
+});
