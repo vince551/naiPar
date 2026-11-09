@@ -23,7 +23,10 @@ const ADULT_HASH = '$argon2id$synthetic-adult-hash';
 function createPool({
   childRows = [],
   adultRow = null,
-  failOnAudit = false
+  failOnAudit = false,
+  lockedStatusOverride = null,
+  lockedConsentApprovedOverride = null,
+  lockedCredentialHashOverride = null
 } = {}) {
   const queries = [];
   const clientQueries = [];
@@ -35,6 +38,29 @@ function createPool({
       clientQueries.push({ sql, params });
       if (failOnAudit && sql.includes('INSERT INTO audit_logs')) {
         throw new Error('synthetic audit failure');
+      }
+      if (sql.includes('FROM users') && sql.includes('FOR UPDATE')) {
+        const account = [...childRows, ...(adultRow ? [adultRow] : [])]
+          .find(candidate => candidate.id === params[0]);
+        if (!account) return { rows: [], rowCount: 0 };
+        const isChild = ['public_child', 'delegate'].includes(account.role);
+        return {
+          rows: [{
+            id: account.id,
+            role: account.role,
+            status: lockedStatusOverride || account.status,
+            passphrase_hash: isChild ? (lockedCredentialHashOverride || account.credential_hash) : null,
+            password_hash: isChild ? null : (lockedCredentialHashOverride || account.credential_hash)
+          }],
+          rowCount: 1
+        };
+      }
+      if (sql.includes('FROM guardian_consents')) {
+        const child = childRows.find(candidate => candidate.id === params[0]);
+        const approved = lockedConsentApprovedOverride === null
+          ? child?.guardian_consent_approved
+          : lockedConsentApprovedOverride;
+        return { rows: approved ? [{ id: 'synthetic-consent' }] : [], rowCount: approved ? 1 : 0 };
       }
       if (sql.includes('INSERT INTO auth_sessions')) {
         return {
