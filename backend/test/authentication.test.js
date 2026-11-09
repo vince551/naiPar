@@ -128,6 +128,7 @@ test('child login creates a hashed session only for an active account with appro
   );
   assert.ok(!sessionInsert.params.includes(result.sessionToken));
   assert.ok(!sessionInsert.params.includes(result.csrfToken));
+  assert.ok(pool.clientQueries.some(entry => entry.sql.includes('INSERT INTO auth_attempts') && entry.params[1] === true));
   assert.ok(pool.clientQueries.some(entry => entry.sql === 'COMMIT'));
   assert.equal(pool.released, true);
 });
@@ -225,6 +226,10 @@ test('unknown adult account performs dummy Argon2 verification and returns gener
     secret: 'synthetic adult password'
   }]);
   assert.equal(pool.connects, 0);
+  const failedAttempt = pool.queries.find(entry => entry.sql.includes('INSERT INTO auth_attempts'));
+  assert.ok(failedAttempt);
+  assert.equal(failedAttempt.params[1], false);
+  assert.ok(!failedAttempt.params.includes('unknown@example.org'));
 });
 
 test('invalid login input is rejected before database access', async () => {
