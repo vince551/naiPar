@@ -97,11 +97,107 @@ jobs:
               !row.stakeholder_updates_table ||
               !row.public_view ||
               !row.stakeholder_view ||
-              Number(row.migration_count) !== 5
+              Number(row.migration_count) !== 6
             ) {
               throw new Error('One or more expected schema objects are missing');
             }
             process.stdout.write(JSON.stringify(row) + '\\n');
+          } finally {
+            await pool.end();
+          }
+          NODE
+      - name: Verify session revocation triggers
+        run: |
+          node --input-type=module <<'NODE'
+          import pg from 'pg';
+          const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+          const fail = message => { throw new Error(message); };
+          try {
+            const adultResult = await pool.query(`
+              INSERT INTO users (
+                full_name, full_name_ciphertext, role, status,
+                school, school_ciphertext, email_normalized, password_hash
+              ) VALUES (
+                NULL, $1, 'coordinator', 'active',
+                NULL, NULL, 'ci-coordinator@example.test', '$argon2id$synthetic'
+              )
+              RETURNING id
+            `, [Buffer.from('synthetic encrypted adult identity')]);
+            const adultId = adultResult.rows[0].id;
+
+            const adultSession = await pool.query(`
+              INSERT INTO auth_sessions (user_id, token_hash, csrf_token_hash, expires_at)
+              VALUES ($1, $2, $3, now() + interval '8 hours')
+              RETURNING id
+            `, [adultId, Buffer.alloc(32, 11), Buffer.alloc(32, 12)]);
+            await pool.query(
+              "UPDATE users SET password_hash = '$argon2id$changed' WHERE id = $1",
+              [adultId]
+            );
+            let check = await pool.query(
+              'SELECT revoked_at IS NOT NULL AS revoked FROM auth_sessions WHERE id = $1',
+              [adultSession.rows[0].id]
+            );
+            if (!check.rows[0].revoked) fail('Credential change did not revoke adult sessions');
+
+            const childResult = await pool.query(`
+              INSERT INTO users (
+                full_name, full_name_ciphertext, role, status, age,
+                school, school_ciphertext, county, ward,
+                guardian_phone_lookup_hash, guardian_phone_ciphertext, passphrase_hash
+              ) VALUES (
+                NULL, $1, 'public_child', 'active', 14,
+                NULL, $2, 'Mombasa', 'Nyali', $3, $4, '$argon2id$synthetic-child'
+              )
+              RETURNING id
+            `, [
+              Buffer.from('synthetic encrypted child identity'),
+              Buffer.from('synthetic encrypted school'),
+              Buffer.alloc(32, 21),
+              Buffer.from('synthetic encrypted guardian phone')
+            ]);
+            const childId = childResult.rows[0].id;
+
+            const consentResult = await pool.query(`
+              INSERT INTO guardian_consents (
+                child_user_id, guardian_name, guardian_name_ciphertext,
+                guardian_phone_lookup_hash, guardian_phone_ciphertext,
+                consent_text_version, status, reviewed_by, reviewed_at, granted_at
+              ) VALUES (
+                $1, NULL, $2, $3, $4, 'ci-test-v1', 'approved', $5, now(), now()
+              )
+              RETURNING id
+            `, [
+              childId,
+              Buffer.from('synthetic encrypted guardian name'),
+              Buffer.alloc(32, 21),
+              Buffer.from('synthetic encrypted guardian phone'),
+              adultId
+            ]);
+
+            const childSession = await pool.query(`
+              INSERT INTO auth_sessions (user_id, token_hash, csrf_token_hash, expires_at)
+              VALUES ($1, $2, $3, now() + interval '8 hours')
+              RETURNING id
+            `, [childId, Buffer.alloc(32, 31), Buffer.alloc(32, 32)]);
+            await pool.query(
+              "UPDATE guardian_consents SET status = 'withdrawn', withdrawn_at = now() WHERE id = $1",
+              [consentResult.rows[0].id]
+            );
+            check = await pool.query(
+              'SELECT revoked_at IS NOT NULL AS revoked FROM auth_sessions WHERE id = $1',
+              [childSession.rows[0].id]
+            );
+            if (!check.rows[0].revoked) fail('Guardian consent withdrawal did not revoke child sessions');
+
+            let deleteBlocked = false;
+            try {
+              await pool.query('DELETE FROM guardian_consents WHERE id = $1', [consentResult.rows[0].id]);
+            } catch (error) {
+              deleteBlocked = String(error.message).includes('cannot be deleted');
+            }
+            if (!deleteBlocked) fail('Guardian consent record deletion was not blocked');
+            process.stdout.write('Session revocation triggers passed\\n');
           } finally {
             await pool.end();
           }
