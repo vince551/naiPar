@@ -22,11 +22,11 @@ This branch adds the first runnable API foundation and a narrowly scoped child-r
 - `GET /api/v1/auth/session` and `POST /api/v1/auth/logout`.
 - Five-attempt / 15-minute in-memory rate limit on child registration and ten-attempt / 15-minute in-memory rate limit on login.
 - Reusable server-context role guards that deny child/delegate access until guardian consent is approved.
-- Unit tests for validation, encryption/tamper detection, transactional rollback, pending consent, login, session cookies, CSRF and role checks.
+- Unit tests for validation, encryption/tamper detection, transactional rollback, pending consent, login, session cookies, CSRF, role checks and authentication race conditions. CI also verifies PostgreSQL migration execution and security-trigger behaviour.
 
 ### Not implemented yet
 
-- Guardian SMS/OTP or equivalent independent consent verification and the coordinator consent-review workflow.
+- Guardian SMS/OTP or equivalent independent consent verification and the coordinator consent-review workflow. The consent table is protected from deletion; withdrawal must be represented as a status transition.
 - Adult account provisioning/registration, password recovery, guardian-assisted child recovery, session listing/device management or MFA.
 - Resource-level API endpoints for sittings, motions, debates, votes, concerns, resolutions and stakeholder updates. The session resolver is present, but those business routes are not yet mounted.
 - Frontend API integration. The current React login and registration remain clearly labelled demonstration flows.
@@ -181,4 +181,4 @@ A public child must not access the official hall or vote. A stakeholder must not
 
 The automated unit suite uses synthetic fixtures and fake database connections. It tests validation, phone normalisation, AES-GCM encryption/tamper rejection, atomic registration rollback, role guards, migration transaction handling/checksum-drift detection, Argon2 verification paths, generic login failures, session-token hashing, cookie flags and CSRF checks.
 
-The SQL migrations have **not** been executed against PostgreSQL in this run because no database server or connection is configured. The API has not been deployed or connected to the frontend. Passing unit tests does not establish production readiness.
+The SQL migrations are executed in CI against a disposable PostgreSQL 16 service, including checks for core tables/views and session-revocation triggers. No persistent development/staging database is configured. The API has not been deployed or connected to the frontend. Passing unit tests does not establish production readiness.
