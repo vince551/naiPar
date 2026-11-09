@@ -17,7 +17,8 @@ This branch adds the first runnable API foundation and a narrowly scoped child-r
 - `POST /api/v1/auth/child/registration-requests`: creates a pending child account and pending guardian-consent record in one database transaction.
 - `POST /api/v1/auth/login`: verifies child/delegate credentials against guardian-phone lookup plus passphrase, or adult work email plus password. Child sign-in is allowed only for an active account with approved, non-withdrawn consent.
 - Opaque 256-bit session tokens stored only as SHA-256 digests, issued in HttpOnly, SameSite=Lax cookies; Secure is enabled in production.
-- Eight-hour server-side sessions, revocation on logout or inactive account status, trusted database-backed role/consent context, and CSRF token validation for logout.
+- Eight-hour server-side sessions, revocation on logout or inactive account status, trusted database-backed role/consent context, CSRF token validation for logout, and login-attempt records that retain only a keyed network fingerprint and outcome.
+- Account status, role and credential hash are rechecked under a user-row lock immediately before issuing a session; child consent is also rechecked under lock.
 - `GET /api/v1/auth/session` and `POST /api/v1/auth/logout`.
 - Five-attempt / 15-minute in-memory rate limit on child registration and ten-attempt / 15-minute in-memory rate limit on login.
 - Reusable server-context role guards that deny child/delegate access until guardian consent is approved.
@@ -113,7 +114,7 @@ A successful request returns HTTP 202 with a registration request ID and both st
 
 **A checkbox or API request does not prove guardian consent.** The child account remains inactive. No OTP is sent or verified yet, no consent document is collected, and no login session is issued.
 
-The registration endpoint is rate-limited to five requests per IP in 15 minutes. Login is limited to ten requests per IP in 15 minutes. Both use the default in-memory limiter: this is a basic single-instance control, not a distributed abuse-prevention solution. Production should use a shared rate-limit store and monitor abuse without logging credentials or raw identifiers.
+The registration endpoint is rate-limited to five requests per IP in 15 minutes. Login is limited to ten requests per IP in 15 minutes. Both use the default in-memory limiter: this is a basic single-instance control, not a distributed abuse-prevention solution. Production should use a shared rate-limit store and monitor abuse without logging credentials or raw identifiers. The current attempt table records only a keyed network fingerprint and success/failure outcome; define and enforce a short retention period before production.
 
 ### Login
 
@@ -139,7 +140,7 @@ Adult request:
 }
 ```
 
-The response sets the opaque session token in an HttpOnly cookie and returns a CSRF token in the response body. The raw session token is never returned as JSON or stored in the database. Child login searches the guardian-phone HMAC digest and verifies the passphrase against matching child accounts. If a shared phone plus passphrase matches more than one child, login fails closed; households with multiple children should use distinct passphrases. Adult login normalises the email address and verifies the Argon2id password hash. Unknown adult identifiers incur a dummy Argon2id verification to reduce account-enumeration timing differences.
+The response sets the opaque session token in an HttpOnly cookie and returns a CSRF token in the response body. The raw session token is never returned as JSON or stored in the database. Login attempt records do not store the supplied email, phone number or secret. Child login searches the guardian-phone HMAC digest and verifies the passphrase against matching child accounts. If a shared phone plus passphrase matches more than one child, login fails closed; households with multiple children should use distinct passphrases. Adult login normalises the email address and verifies the Argon2id password hash. Unknown adult identifiers incur a dummy Argon2id verification to reduce account-enumeration timing differences.
 
 A credential match is not enough: the account must be active, and child/delegate accounts must have an approved consent record that has not been withdrawn. Failure messages are deliberately generic.
 
@@ -156,7 +157,7 @@ The current frontend has not yet been connected to these endpoints. It still dis
 
 ## Role and privacy boundaries
 
-The role guards accept only `req.auth` populated by the server-side session resolver. They do not trust role names from request data or headers. No business endpoint should be exposed until it is mounted behind session resolution, authentication, CSRF protection for mutations, and resource-level authorisation.
+The role guards accept only `req.auth` populated by the server-side session resolver. They do not trust role names from request data or headers. Login rechecks the current account status, role and credential hash inside a transaction before session creation, and rechecks child consent while holding a row lock. No business endpoint should be exposed until it is mounted behind session resolution, authentication, CSRF protection for mutations, and resource-level authorisation.
 
 - Public children: public participation and their own permitted submissions only.
 - Delegates: official participation only after delegate verification and approved guardian consent.
