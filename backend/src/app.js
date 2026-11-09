@@ -7,12 +7,32 @@ import {
   RegistrationConflictError,
   RegistrationValidationError
 } from './domain/child-registration.js';
+import {
+  createAuthenticationService,
+  AuthenticationFailedError,
+  AuthenticationValidationError
+} from './domain/authentication.js';
 import { createFieldCrypto } from './security/field-crypto.js';
+import { requireAuthenticated } from './security/authorization.js';
+import {
+  clearSessionCookie,
+  createSessionResolver,
+  requireCsrf,
+  requireSession,
+  serializeSessionCookie
+} from './security/session.js';
 
-export function createApp({ pool, config, hashPassphrase }) {
+export function createApp({
+  pool,
+  config,
+  hashPassphrase,
+  verifySecret,
+  dummyCredentialHash
+}) {
   if (!pool || !config) throw new TypeError('API dependencies are incomplete');
 
   const app = express();
+  const secureCookies = config.nodeEnv === 'production';
   const fieldCrypto = createFieldCrypto({
     encryptionKey: config.encryptionKey,
     guardianPhoneLookupPepper: config.guardianPhoneLookupPepper,
@@ -24,6 +44,13 @@ export function createApp({ pool, config, hashPassphrase }) {
     hashPassphrase,
     consentNoticeVersion: config.consentNoticeVersion
   });
+  const authentication = createAuthenticationService({
+    pool,
+    fieldCrypto,
+    verifySecret,
+    dummyCredentialHash
+  });
+  const resolveSession = createSessionResolver({ pool, secureCookies });
 
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy ? 1 : false);
@@ -49,6 +76,10 @@ export function createApp({ pool, config, hashPassphrase }) {
     }
   });
 
+  // Session identity is loaded only from a server-issued, hashed session cookie.
+  // No client-provided role, user ID or guardian-consent status is trusted.
+  app.use('/api/v1', resolveSession);
+
   const childRegistrationLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 5,
@@ -58,6 +89,19 @@ export function createApp({ pool, config, hashPassphrase }) {
       error: {
         code: 'REGISTRATION_RATE_LIMITED',
         message: 'Too many registration attempts. Please try again later.'
+      }
+    }
+  });
+
+  const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: {
+      error: {
+        code: 'LOGIN_RATE_LIMITED',
+        message: 'Too many sign-in attempts. Please try again later.'
       }
     }
   });
@@ -82,6 +126,60 @@ export function createApp({ pool, config, hashPassphrase }) {
     }
   );
 
+  app.post('/api/v1/auth/login', loginLimiter, async (req, res, next) => {
+    try {
+      const result = await authentication.authenticate(req.body, {
+        requestId: req.requestId,
+        networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+      });
+
+      res.setHeader(
+        'Set-Cookie',
+        serializeSessionCookie(result.sessionToken, { secure: secureCookies })
+      );
+      res.status(200).json({
+        data: {
+          userId: result.userId,
+          role: result.role,
+          csrfToken: result.csrfToken,
+          expiresAt: result.expiresAt
+        },
+        message: 'Sign-in successful.'
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/v1/auth/session', requireAuthenticated, (req, res) => {
+    res.status(200).json({
+      data: {
+        userId: req.auth.userId,
+        role: req.auth.role
+      }
+    });
+  });
+
+  app.post(
+    '/api/v1/auth/logout',
+    requireSession,
+    requireCsrf,
+    async (req, res, next) => {
+      try {
+        await authentication.revokeSession({
+          sessionId: req.sessionId,
+          userId: req.auth.userId,
+          requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.setHeader('Set-Cookie', clearSessionCookie({ secure: secureCookies }));
+        res.status(204).end();
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
   app.use((_req, res) => {
     res.status(404).json({
       error: { code: 'NOT_FOUND', message: 'The requested endpoint was not found.' }
@@ -89,11 +187,12 @@ export function createApp({ pool, config, hashPassphrase }) {
   });
 
   app.use((error, req, res, _next) => {
-    if (error instanceof RegistrationValidationError) {
+    if (error instanceof RegistrationValidationError ||
+        error instanceof AuthenticationValidationError) {
       return res.status(400).json({
         error: {
           code: 'VALIDATION_FAILED',
-          message: 'Check the highlighted registration details.',
+          message: 'Check the highlighted details.',
           fields: error.fields
         }
       });
@@ -104,6 +203,15 @@ export function createApp({ pool, config, hashPassphrase }) {
         error: {
           code: 'REGISTRATION_CONFLICT',
           message: 'This registration could not be accepted. Please contact the Assembly Secretariat.'
+        }
+      });
+    }
+
+    if (error instanceof AuthenticationFailedError) {
+      return res.status(401).json({
+        error: {
+          code: 'INVALID_CREDENTIALS',
+          message: 'The sign-in details are invalid or the account is not yet authorised.'
         }
       });
     }
@@ -121,7 +229,7 @@ export function createApp({ pool, config, hashPassphrase }) {
     }
 
     // Do not log request bodies, names, phone numbers, passphrases, SQL text,
-    // or raw exception messages. The request ID supports safe correlation.
+    // session tokens, CSRF tokens or raw exception messages.
     console.error(JSON.stringify({
       event: 'api_request_failed',
       requestId: req.requestId,
