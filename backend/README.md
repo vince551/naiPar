@@ -26,13 +26,11 @@ This branch adds the first runnable API foundation and a narrowly scoped child-r
 
 ### Not implemented yet
 
-- Guardian SMS/OTP or equivalent independent consent verification.
 - Guardian SMS/OTP or equivalent independent consent verification and the coordinator consent-review workflow.
 - Adult account provisioning/registration, password recovery, guardian-assisted child recovery, session listing/device management or MFA.
 - Resource-level API endpoints for sittings, motions, debates, votes, concerns, resolutions and stakeholder updates. The session resolver is present, but those business routes are not yet mounted.
-- Public concern, official sitting, motion, debate, voting, resolution or stakeholder API endpoints.
 - Frontend API integration. The current React login and registration remain clearly labelled demonstration flows.
-- A live PostgreSQL environment, deployment, backup/restore or production security review.
+- A persistent development/staging PostgreSQL environment, deployment, backup/restore or production security review. CI now applies the migrations to a disposable PostgreSQL 16 service.
 
 Do not collect real children's information through this API until guardian verification, session authentication, access control, safeguarding procedures and deployment controls are complete.
 
