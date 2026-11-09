@@ -1,7 +1,15 @@
 import argon2 from 'argon2';
+import { randomBytes } from 'node:crypto';
 import { readConfig } from './config.js';
 import { createApp } from './app.js';
 import { createDatabasePool } from './db/pool.js';
+
+const ARGON2_OPTIONS = Object.freeze({
+  type: argon2.argon2id,
+  memoryCost: 19_456,
+  timeCost: 2,
+  parallelism: 1
+});
 
 async function start() {
   const config = readConfig();
@@ -16,15 +24,19 @@ async function start() {
       throw new Error('Database migrations have not been applied');
     }
 
+    // A per-process dummy hash gives unknown accounts a comparable Argon2id
+    // verification cost without keeping a reusable dummy password in source.
+    const dummyCredentialHash = await argon2.hash(
+      randomBytes(32).toString('hex'),
+      ARGON2_OPTIONS
+    );
+
     const app = createApp({
       pool,
       config,
-      hashPassphrase: secret => argon2.hash(secret, {
-        type: argon2.argon2id,
-        memoryCost: 19_456,
-        timeCost: 2,
-        parallelism: 1
-      })
+      hashPassphrase: secret => argon2.hash(secret, ARGON2_OPTIONS),
+      verifySecret: (encodedHash, secret) => argon2.verify(encodedHash, secret),
+      dummyCredentialHash
     });
 
     const server = app.listen(config.port, '0.0.0.0', () => {
