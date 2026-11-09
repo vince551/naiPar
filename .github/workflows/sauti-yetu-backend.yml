@@ -1,0 +1,125 @@
+name: Sauti Yetu verification
+
+on:
+  push:
+    branches:
+      - feature/api-registration-foundation
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-build:
+    name: Preserve and build the existing frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build frontend
+        run: npm run build
+
+  backend-tests:
+    name: Backend tests and PostgreSQL migrations
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: sauti_yetu_test
+          POSTGRES_USER: sauti_yetu
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sauti_yetu -d sauti_yetu_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      NODE_ENV: test
+      PORT: 4000
+      TRUST_PROXY: "false"
+      DATABASE_SSL: "false"
+      DATABASE_URL: postgresql://sauti_yetu:ci-only-password@localhost:5432/sauti_yetu_test
+      MIGRATION_DATABASE_URL: postgresql://sauti_yetu:ci-only-password@localhost:5432/sauti_yetu_test
+      GUARDIAN_PHONE_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      GUARDIAN_PHONE_LOOKUP_PEPPER: ci-guardian-lookup-pepper-32-bytes
+      AUDIT_FINGERPRINT_PEPPER: ci-audit-fingerprint-pepper-32-bytes
+      CONSENT_NOTICE_VERSION: ci-test-v1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install backend dependencies
+        run: npm install --no-audit --no-fund
+      - name: Check JavaScript syntax
+        run: npm run check
+      - name: Run synthetic unit tests
+        run: npm test
+      - name: Apply migrations to disposable PostgreSQL
+        run: node src/migrate-cli.js
+      - name: Verify schema objects
+        run: |
+          node --input-type=module <<'NODE'
+          import pg from 'pg';
+          const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+          try {
+            const result = await pool.query(`
+              SELECT
+                to_regclass('public.users') AS users_table,
+                to_regclass('public.guardian_consents') AS consent_table,
+                to_regclass('public.auth_sessions') AS sessions_table,
+                to_regclass('public.stakeholder_updates') AS stakeholder_updates_table,
+                to_regclass('public.public_concern_summary') AS public_view,
+                to_regclass('public.stakeholder_resolution_summary') AS stakeholder_view,
+                (SELECT count(*) FROM schema_migrations) AS migration_count
+            `);
+            const row = result.rows[0];
+            if (
+              !row.users_table ||
+              !row.consent_table ||
+              !row.sessions_table ||
+              !row.stakeholder_updates_table ||
+              !row.public_view ||
+              !row.stakeholder_view ||
+              Number(row.migration_count) !== 5
+            ) {
+              throw new Error('One or more expected schema objects are missing');
+            }
+            process.stdout.write(JSON.stringify(row) + '\\n');
+          } finally {
+            await pool.end();
+          }
+          NODE
+      - name: Smoke-test API health endpoints
+        run: |
+          node src/server.js > /tmp/sauti-yetu-api.log 2>&1 &
+          api_pid=$!
+          cleanup() {
+            kill "$api_pid" 2>/dev/null || true
+            wait "$api_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4000/health/live >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --show-error http://127.0.0.1:4000/health/live
+          curl --fail --show-error http://127.0.0.1:4000/health/ready
