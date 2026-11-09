@@ -359,3 +359,59 @@ test('CSRF middleware requires a matching token and session', () => {
   assert.equal(res.statusCode, 403);
   assert.equal(res.body.error.code, 'CSRF_VALIDATION_FAILED');
 });
+
+
+test('logout revokes only the matching server-side session and writes an audit event', async () => {
+  const pool = createPool();
+  const service = createService(pool, async () => false);
+
+  await service.revokeSession({
+    sessionId: 'synthetic-session',
+    userId: 'synthetic-user',
+    requestId: 'synthetic-logout-request',
+    networkFingerprint: Buffer.from('synthetic-network-fingerprint')
+  });
+
+  const revoke = pool.clientQueries.find(entry => entry.sql.includes('UPDATE auth_sessions'));
+  const audit = pool.clientQueries.find(entry => entry.sql.includes('auth.logout'));
+  assert.ok(revoke);
+  assert.deepEqual(revoke.params, ['synthetic-session', 'synthetic-user']);
+  assert.ok(audit);
+  assert.ok(pool.clientQueries.some(entry => entry.sql === 'COMMIT'));
+  assert.equal(pool.released, true);
+});
+
+test('session middleware clears a cookie when the database account is suspended', async () => {
+  const token = randomBytes(32).toString('base64url');
+  const calls = [];
+  const pool = {
+    async query(sql, params = []) {
+      calls.push({ sql, params });
+      if (sql.includes('FROM auth_sessions s')) {
+        return {
+          rows: [{
+            session_id: 'synthetic-session',
+            user_id: 'synthetic-user',
+            csrf_token_hash: Buffer.alloc(32, 4),
+            role: 'coordinator',
+            status: 'suspended',
+            guardian_consent_status: 'approved'
+          }]
+        };
+      }
+      return { rows: [], rowCount: 1 };
+    }
+  };
+  const resolver = createSessionResolver({ pool, secureCookies: true });
+  const req = { headers: { cookie: `${SESSION_COOKIE_NAME}=${token}` } };
+  const headers = {};
+  const res = { setHeader(name, value) { headers[name] = value; } };
+  let nextCalled = false;
+
+  await resolver(req, res, () => { nextCalled = true; });
+
+  assert.equal(nextCalled, true);
+  assert.equal(req.auth, undefined);
+  assert.match(headers['Set-Cookie'], /Max-Age=0/u);
+  assert.ok(calls.some(entry => entry.sql.startsWith('UPDATE auth_sessions')));
+});
