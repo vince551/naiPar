@@ -225,10 +225,10 @@ jobs:
           try {
             const coordinator = await pool.query(`
               INSERT INTO users (
-                full_name, full_name_ciphertext, role, status,
+                full_name, full_name_ciphertext, role, status, county,
                 school, school_ciphertext, email_normalized, password_hash
               ) VALUES (
-                NULL, $1, 'coordinator', 'active',
+                NULL, $1, 'coordinator', 'active', 'Mombasa',
                 NULL, NULL, 'consent-coordinator@example.test', '$argon2id$synthetic'
               )
               RETURNING id
