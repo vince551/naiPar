@@ -364,6 +364,55 @@ jobs:
             }
             if (!stakeholderApprovalBlocked) fail('Stakeholder was able to approve guardian consent');
 
+            const distantChild = await pool.query(`
+              INSERT INTO users (
+                full_name, full_name_ciphertext, role, status, age,
+                school, school_ciphertext, county, ward,
+                guardian_phone_lookup_hash, guardian_phone_ciphertext, passphrase_hash
+              ) VALUES (
+                NULL, $1, 'public_child', 'pending', 13,
+                NULL, $2, 'Kilifi', 'Mtwapa', $3, $4, '$argon2id$synthetic-child-3'
+              )
+              RETURNING id
+            `, [
+              encrypted('distant child'),
+              encrypted('distant school'),
+              Buffer.alloc(32, 43),
+              encrypted('distant guardian phone')
+            ]);
+            const distantConsent = await pool.query(`
+              INSERT INTO guardian_consents (
+                child_user_id, guardian_name, guardian_name_ciphertext,
+                guardian_phone_lookup_hash, guardian_phone_ciphertext,
+                consent_text_version, status
+              ) VALUES ($1, NULL, $2, $3, $4, 'ci-test-v1', 'pending')
+              RETURNING id
+            `, [
+              distantChild.rows[0].id,
+              encrypted('distant guardian name'),
+              Buffer.alloc(32, 43),
+              encrypted('distant guardian phone')
+            ]);
+            const distantReview = await pool.query(`
+              INSERT INTO guardian_consent_reviews (
+                consent_id, reviewed_by, decision, verification_method, evidence_reference
+              ) VALUES ($1, $2, 'approved', 'in_person', 'ci-review-reference-0003')
+              RETURNING id
+            `, [distantConsent.rows[0].id, coordinatorId]);
+
+            let countyApprovalBlocked = false;
+            try {
+              await pool.query(`
+                UPDATE guardian_consents
+                SET status = 'approved', reviewed_by = $2,
+                    reviewed_at = now(), granted_at = now(), latest_review_id = $3
+                WHERE id = $1
+              `, [distantConsent.rows[0].id, coordinatorId, distantReview.rows[0].id]);
+            } catch (error) {
+              countyApprovalBlocked = String(error.message).includes('coordinator county must match');
+            }
+            if (!countyApprovalBlocked) fail('Coordinator approved consent outside the assigned county');
+
             process.stdout.write('Guardian consent review integrity passed\\n');
           } finally {
             await pool.end();
