@@ -87,7 +87,7 @@ async function withTransaction(pool, work) {
 
 async function requireActiveCoordinator(client, actorUserId) {
   const result = await client.query(
-    `SELECT id
+    `SELECT id, county
      FROM users
      WHERE id = $1
        AND role = 'coordinator'
@@ -96,7 +96,9 @@ async function requireActiveCoordinator(client, actorUserId) {
     [actorUserId]
   );
 
-  if (!result.rows?.[0]) throw new ConsentReviewForbiddenError();
+  const coordinator = result.rows?.[0];
+  if (!coordinator?.county) throw new ConsentReviewForbiddenError();
+  return coordinator.county;
 }
 
 async function writeAudit(client, {
@@ -137,7 +139,7 @@ export function createGuardianConsentReviewService({ pool, fieldCrypto }) {
 
   async function listReviewQueue({ actorUserId, requestId, networkFingerprint }) {
     return withTransaction(pool, async client => {
-      await requireActiveCoordinator(client, actorUserId);
+      const coordinatorCounty = await requireActiveCoordinator(client, actorUserId);
 
       const result = await client.query(
         `SELECT
@@ -146,9 +148,12 @@ export function createGuardianConsentReviewService({ pool, fieldCrypto }) {
           gc.consent_text_version,
           gc.created_at
         FROM guardian_consents gc
+        JOIN users u ON u.id = gc.child_user_id
         WHERE gc.status IN ('pending', 'rejected')
+          AND u.county = $1
         ORDER BY gc.created_at ASC
-        LIMIT 100`
+        LIMIT 100`,
+        [coordinatorCounty]
       );
 
       await writeAudit(client, {
@@ -177,7 +182,7 @@ export function createGuardianConsentReviewService({ pool, fieldCrypto }) {
     const consentId = validateConsentId(consentIdValue);
 
     return withTransaction(pool, async client => {
-      await requireActiveCoordinator(client, actorUserId);
+      const coordinatorCounty = await requireActiveCoordinator(client, actorUserId);
 
       const result = await client.query(
         `SELECT
@@ -196,8 +201,9 @@ export function createGuardianConsentReviewService({ pool, fieldCrypto }) {
         FROM guardian_consents gc
         JOIN users u ON u.id = gc.child_user_id
         WHERE gc.id = $1
+          AND u.county = $2
         FOR SHARE OF gc, u`,
-        [consentId]
+        [consentId, coordinatorCounty]
       );
 
       const row = result.rows?.[0];
@@ -248,7 +254,7 @@ export function createGuardianConsentReviewService({ pool, fieldCrypto }) {
     const input = validateReview(payload);
 
     return withTransaction(pool, async client => {
-      await requireActiveCoordinator(client, actorUserId);
+      const coordinatorCounty = await requireActiveCoordinator(client, actorUserId);
 
       const consentResult = await client.query(
         `SELECT
@@ -260,8 +266,9 @@ export function createGuardianConsentReviewService({ pool, fieldCrypto }) {
         FROM guardian_consents gc
         JOIN users u ON u.id = gc.child_user_id
         WHERE gc.id = $1
+          AND u.county = $2
         FOR UPDATE OF gc, u`,
-        [consentId]
+        [consentId, coordinatorCounty]
       );
 
       const consent = consentResult.rows?.[0];
