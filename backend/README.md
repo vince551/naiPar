@@ -22,7 +22,7 @@ This branch adds the first runnable API foundation and a narrowly scoped child-r
 - `GET /api/v1/auth/session` and `POST /api/v1/auth/logout`.
 - Five-attempt / 15-minute in-memory rate limit on child registration and ten-attempt / 15-minute in-memory rate limit on login.
 - Reusable server-context role guards that deny child/delegate access until guardian consent is approved.
-- Coordinator-only consent review queue, restricted identity-detail access with read auditing, and approve/reject decisions tied to an append-only review record.
+- County-scoped coordinator consent review queue, restricted identity-detail access with read auditing, and approve/reject decisions tied to an append-only review record.
 - Consent approval activates the pending child account only in the same transaction as the review and audit event; rejection leaves the account pending.
 - Unit tests for validation, encryption/tamper detection, transactional rollback, pending consent, login, session cookies, CSRF, role checks and authentication race conditions. CI also verifies PostgreSQL migration execution and security-trigger behaviour.
 
@@ -64,6 +64,7 @@ Migrations in `database/migrations/` are applied in numeric order:
 | `0005_accountability_integrity.sql` | Restricts deletion of audit actors, binds stakeholder updates to their actual assignment and makes stakeholder updates append-only |
 | `0006_session_revocation.sql` | Revokes sessions after account suspension, role/credential changes or guardian-consent withdrawal; prevents deletion of consent history |
 | `0007_guardian_consent_reviews.sql` | Adds append-only coordinator review records and database enforcement that only an active coordinator can approve/reject consent against a matching review |
+| `0008_guardian_review_county_scope.sql` | Restricts coordinator review to the child's county in both the API service and database trigger |
 
 The migration runner wraps each migration and its checksum record in one transaction. It uses a PostgreSQL advisory lock to avoid concurrent migration runs and refuses to continue if an already-applied migration's checksum changes. It runs as a separate command so the API process does not need schema-owner privileges.
 
@@ -120,7 +121,7 @@ The registration endpoint is rate-limited to five requests per IP in 15 minutes.
 
 ### Coordinator guardian consent review
 
-The following routes require an active server-authenticated `coordinator` role. Mutating requests also require the session CSRF token.
+The following routes require an active server-authenticated `coordinator` role with a non-empty county assignment matching the child's county. Mutating requests also require the session CSRF token. The service and database trigger both enforce the county boundary; a coordinator from another county receives no child details.
 
 - `GET /api/v1/coordinator/guardian-consents` — minimal review queue (consent ID, status, notice version and request date only).
 - `GET /api/v1/coordinator/guardian-consents/:consentId` — decrypts child/guardian identity for a single pending or rejected request. Every detail read is written to the append-only audit log. The queue itself does not expose names, phone numbers or school details.
@@ -207,6 +208,6 @@ A public child must not access the official hall or vote. A stakeholder must not
 
 ## Verification status
 
-The automated unit suite uses synthetic fixtures and fake database connections. It tests validation, phone normalisation, AES-GCM encryption/tamper rejection, atomic registration rollback, role guards, coordinator-only consent review, audited identity reads, review/activation transaction ordering, rejection and rollback behaviour, migration transaction handling/checksum-drift detection, Argon2 verification paths, generic login failures, session-token hashing, cookie flags and CSRF checks.
+The automated unit suite uses synthetic fixtures and fake database connections. It tests validation, phone normalisation, AES-GCM encryption/tamper rejection, atomic registration rollback, role guards, county-scoped coordinator consent review, audited identity reads, review/activation transaction ordering, rejection and rollback behaviour, migration transaction handling/checksum-drift detection, Argon2 verification paths, generic login failures, session-token hashing, cookie flags and CSRF checks.
 
-The SQL migrations are executed in CI against a disposable PostgreSQL 16 service, including checks for core tables/views, session-revocation triggers, append-only review history and coordinator-only consent approval. No persistent development/staging database is configured. The API has not been deployed or connected to the frontend. Passing unit tests does not establish production readiness.
+The SQL migrations are executed in CI against a disposable PostgreSQL 16 service, including checks for core tables/views, session-revocation triggers, append-only review history, coordinator-only consent approval and county-scope enforcement. No persistent development/staging database is configured. The API has not been deployed or connected to the frontend. Passing unit tests does not establish production readiness.
