@@ -31,7 +31,7 @@ function createFakePool({
 
   const client = {
     async query(sql, params = []) {
-      const normalized = sql.replace(/\\s+/gu, ' ').trim();
+      const normalized = sql.replace(/\s+/gu, ' ').trim();
       calls.push({ sql: normalized, params });
 
       if (normalized === 'BEGIN') {
