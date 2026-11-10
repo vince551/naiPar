@@ -22,11 +22,13 @@ This branch adds the first runnable API foundation and a narrowly scoped child-r
 - `GET /api/v1/auth/session` and `POST /api/v1/auth/logout`.
 - Five-attempt / 15-minute in-memory rate limit on child registration and ten-attempt / 15-minute in-memory rate limit on login.
 - Reusable server-context role guards that deny child/delegate access until guardian consent is approved.
+- Coordinator-only consent review queue, restricted identity-detail access with read auditing, and approve/reject decisions tied to an append-only review record.
+- Consent approval activates the pending child account only in the same transaction as the review and audit event; rejection leaves the account pending.
 - Unit tests for validation, encryption/tamper detection, transactional rollback, pending consent, login, session cookies, CSRF, role checks and authentication race conditions. CI also verifies PostgreSQL migration execution and security-trigger behaviour.
 
 ### Not implemented yet
 
-- Guardian SMS/OTP or equivalent independent consent verification and the coordinator consent-review workflow. The consent table is protected from deletion; withdrawal must be represented as a status transition.
+- Guardian SMS/OTP or another automated, independent guardian confirmation channel. The current coordinator workflow records a manual verification method and opaque evidence reference; it does not itself contact the guardian or prove that a call/document was genuine.
 - Adult account provisioning/registration, password recovery, guardian-assisted child recovery, session listing/device management or MFA.
 - Resource-level API endpoints for sittings, motions, debates, votes, concerns, resolutions and stakeholder updates. The session resolver is present, but those business routes are not yet mounted.
 - Frontend API integration. The current React login and registration remain clearly labelled demonstration flows.
@@ -61,6 +63,7 @@ Migrations in `database/migrations/` are applied in numeric order:
 | `0004_encrypted_identity_fields.sql` | Encrypted identity/contact columns, removal of plaintext identity writes and support for multiple children under one guardian phone |
 | `0005_accountability_integrity.sql` | Restricts deletion of audit actors, binds stakeholder updates to their actual assignment and makes stakeholder updates append-only |
 | `0006_session_revocation.sql` | Revokes sessions after account suspension, role/credential changes or guardian-consent withdrawal; prevents deletion of consent history |
+| `0007_guardian_consent_reviews.sql` | Adds append-only coordinator review records and database enforcement that only an active coordinator can approve/reject consent against a matching review |
 
 The migration runner wraps each migration and its checksum record in one transaction. It uses a PostgreSQL advisory lock to avoid concurrent migration runs and refuses to continue if an already-applied migration's checksum changes. It runs as a separate command so the API process does not need schema-owner privileges.
 
@@ -114,6 +117,30 @@ A successful request returns HTTP 202 with a registration request ID and both st
 **A checkbox or API request does not prove guardian consent.** The child account remains inactive. No OTP is sent or verified yet, no consent document is collected, and no login session is issued.
 
 The registration endpoint is rate-limited to five requests per IP in 15 minutes. Login is limited to ten requests per IP in 15 minutes. Both use the default in-memory limiter: this is a basic single-instance control, not a distributed abuse-prevention solution. Production should use a shared rate-limit store and monitor abuse without logging credentials or raw identifiers. The current attempt table records only a keyed network fingerprint and success/failure outcome; define and enforce a short retention period before production.
+
+### Coordinator guardian consent review
+
+The following routes require an active server-authenticated `coordinator` role. Mutating requests also require the session CSRF token.
+
+- `GET /api/v1/coordinator/guardian-consents` — minimal review queue (consent ID, status, notice version and request date only).
+- `GET /api/v1/coordinator/guardian-consents/:consentId` — decrypts child/guardian identity for a single pending or rejected request. Every detail read is written to the append-only audit log. The queue itself does not expose names, phone numbers or school details.
+- `POST /api/v1/coordinator/guardian-consents/:consentId/review` — records an approval or rejection.
+
+Example decision body:
+
+```json
+{
+  "decision": "approved",
+  "verificationMethod": "verified_call",
+  "evidenceReference": "guardian-check-0001"
+}
+```
+
+Allowed manual verification methods are `in_person`, `verified_call` and `document_review`. The evidence reference is an opaque internal record identifier; do not put a phone number, name, document URL or sensitive narrative in it. The service does not accept uploaded documents or expose a storage key. The coordinator must follow an organisation-approved safeguarding procedure and retain evidence in an appropriately protected system.
+
+An approval is committed only when the review record, consent status update, child-account activation and audit event all succeed in one database transaction. The database trigger rejects direct approval without a matching append-only review and rejects review decisions by anyone other than an active coordinator. Rejection leaves the child account pending. A rejected request can be reviewed again after further evidence is obtained; an approved or withdrawn request cannot be re-reviewed through this endpoint.
+
+**This is a manual coordinator attestation, not an OTP system or automated proof of guardian identity.** Do not describe a phone call or document as independently verified unless the coordinator has completed the approved procedure. Guardian SMS/OTP delivery, guardian self-service confirmation, evidence upload/storage and resubmission UX are still future work.
 
 ### Login
 
@@ -180,6 +207,6 @@ A public child must not access the official hall or vote. A stakeholder must not
 
 ## Verification status
 
-The automated unit suite uses synthetic fixtures and fake database connections. It tests validation, phone normalisation, AES-GCM encryption/tamper rejection, atomic registration rollback, role guards, migration transaction handling/checksum-drift detection, Argon2 verification paths, generic login failures, session-token hashing, cookie flags and CSRF checks.
+The automated unit suite uses synthetic fixtures and fake database connections. It tests validation, phone normalisation, AES-GCM encryption/tamper rejection, atomic registration rollback, role guards, coordinator-only consent review, audited identity reads, review/activation transaction ordering, rejection and rollback behaviour, migration transaction handling/checksum-drift detection, Argon2 verification paths, generic login failures, session-token hashing, cookie flags and CSRF checks.
 
-The SQL migrations are executed in CI against a disposable PostgreSQL 16 service, including checks for core tables/views and session-revocation triggers. No persistent development/staging database is configured. The API has not been deployed or connected to the frontend. Passing unit tests does not establish production readiness.
+The SQL migrations are executed in CI against a disposable PostgreSQL 16 service, including checks for core tables/views, session-revocation triggers, append-only review history and coordinator-only consent approval. No persistent development/staging database is configured. The API has not been deployed or connected to the frontend. Passing unit tests does not establish production readiness.
