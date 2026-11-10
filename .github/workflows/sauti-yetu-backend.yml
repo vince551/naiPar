@@ -3,7 +3,7 @@ name: Sauti Yetu verification
 on:
   push:
     branches:
-      - feature/api-registration-foundation
+      - 'feature/**'
   pull_request:
     branches:
       - main
@@ -84,6 +84,7 @@ jobs:
                 to_regclass('public.users') AS users_table,
                 to_regclass('public.guardian_consents') AS consent_table,
                 to_regclass('public.auth_sessions') AS sessions_table,
+                to_regclass('public.guardian_consent_reviews') AS consent_reviews_table,
                 to_regclass('public.stakeholder_updates') AS stakeholder_updates_table,
                 to_regclass('public.public_concern_summary') AS public_view,
                 to_regclass('public.stakeholder_resolution_summary') AS stakeholder_view,
@@ -94,10 +95,11 @@ jobs:
               !row.users_table ||
               !row.consent_table ||
               !row.sessions_table ||
+              !row.consent_reviews_table ||
               !row.stakeholder_updates_table ||
               !row.public_view ||
               !row.stakeholder_view ||
-              Number(row.migration_count) !== 6
+              Number(row.migration_count) !== 7
             ) {
               throw new Error('One or more expected schema objects are missing');
             }
@@ -198,6 +200,160 @@ jobs:
             }
             if (!deleteBlocked) fail('Guardian consent record deletion was not blocked');
             process.stdout.write('Session revocation triggers passed\\n');
+          } finally {
+            await pool.end();
+          }
+          NODE
+      - name: Verify guardian consent review integrity
+        run: |
+          node --input-type=module <<'NODE'
+          import pg from 'pg';
+          const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+          const fail = message => { throw new Error(message); };
+          const encrypted = label => Buffer.from('synthetic encrypted ' + label);
+          try {
+            const coordinator = await pool.query(`
+              INSERT INTO users (
+                full_name, full_name_ciphertext, role, status,
+                school, school_ciphertext, email_normalized, password_hash
+              ) VALUES (
+                NULL, $1, 'coordinator', 'active',
+                NULL, NULL, 'consent-coordinator@example.test', '$argon2id$synthetic'
+              )
+              RETURNING id
+            `, [encrypted('coordinator')]);
+            const coordinatorId = coordinator.rows[0].id;
+
+            const child = await pool.query(`
+              INSERT INTO users (
+                full_name, full_name_ciphertext, role, status, age,
+                school, school_ciphertext, county, ward,
+                guardian_phone_lookup_hash, guardian_phone_ciphertext, passphrase_hash
+              ) VALUES (
+                NULL, $1, 'public_child', 'pending', 14,
+                NULL, $2, 'Mombasa', 'Nyali', $3, $4, '$argon2id$synthetic-child'
+              )
+              RETURNING id
+            `, [
+              encrypted('child'),
+              encrypted('school'),
+              Buffer.alloc(32, 41),
+              encrypted('guardian phone')
+            ]);
+            const childId = child.rows[0].id;
+
+            const consent = await pool.query(`
+              INSERT INTO guardian_consents (
+                child_user_id, guardian_name, guardian_name_ciphertext,
+                guardian_phone_lookup_hash, guardian_phone_ciphertext,
+                consent_text_version, status
+              ) VALUES ($1, NULL, $2, $3, $4, 'ci-test-v1', 'pending')
+              RETURNING id
+            `, [
+              childId,
+              encrypted('guardian name'),
+              Buffer.alloc(32, 41),
+              encrypted('guardian phone')
+            ]);
+            const consentId = consent.rows[0].id;
+
+            let directApprovalBlocked = false;
+            try {
+              await pool.query(`
+                UPDATE guardian_consents
+                SET status = 'approved', reviewed_by = $2,
+                    reviewed_at = now(), granted_at = now()
+                WHERE id = $1
+              `, [consentId, coordinatorId]);
+            } catch (error) {
+              directApprovalBlocked = String(error.message).includes('recorded coordinator review');
+            }
+            if (!directApprovalBlocked) fail('Consent was approved without a recorded review');
+
+            const review = await pool.query(`
+              INSERT INTO guardian_consent_reviews (
+                consent_id, reviewed_by, decision, verification_method, evidence_reference
+              ) VALUES ($1, $2, 'approved', 'verified_call', 'ci-review-reference-0001')
+              RETURNING id
+            `, [consentId, coordinatorId]);
+            await pool.query(`
+              UPDATE guardian_consents
+              SET status = 'approved', reviewed_by = $2,
+                  reviewed_at = now(), granted_at = now(), latest_review_id = $3
+              WHERE id = $1
+            `, [consentId, coordinatorId, review.rows[0].id]);
+
+            let reviewMutationBlocked = false;
+            try {
+              await pool.query(
+                "UPDATE guardian_consent_reviews SET evidence_reference = 'changed-reference-0001' WHERE id = $1",
+                [review.rows[0].id]
+              );
+            } catch (error) {
+              reviewMutationBlocked = String(error.message).includes('append-only');
+            }
+            if (!reviewMutationBlocked) fail('Guardian consent review history was mutable');
+
+            const stakeholder = await pool.query(`
+              INSERT INTO users (
+                full_name, full_name_ciphertext, role, status,
+                school, school_ciphertext, email_normalized, password_hash
+              ) VALUES (
+                NULL, $1, 'stakeholder', 'active',
+                NULL, NULL, 'consent-stakeholder@example.test', '$argon2id$synthetic'
+              )
+              RETURNING id
+            `, [encrypted('stakeholder')]);
+            const secondChild = await pool.query(`
+              INSERT INTO users (
+                full_name, full_name_ciphertext, role, status, age,
+                school, school_ciphertext, county, ward,
+                guardian_phone_lookup_hash, guardian_phone_ciphertext, passphrase_hash
+              ) VALUES (
+                NULL, $1, 'public_child', 'pending', 13,
+                NULL, $2, 'Mombasa', 'Kisauni', $3, $4, '$argon2id$synthetic-child-2'
+              )
+              RETURNING id
+            `, [
+              encrypted('second child'),
+              encrypted('second school'),
+              Buffer.alloc(32, 42),
+              encrypted('second guardian phone')
+            ]);
+            const secondConsent = await pool.query(`
+              INSERT INTO guardian_consents (
+                child_user_id, guardian_name, guardian_name_ciphertext,
+                guardian_phone_lookup_hash, guardian_phone_ciphertext,
+                consent_text_version, status
+              ) VALUES ($1, NULL, $2, $3, $4, 'ci-test-v1', 'pending')
+              RETURNING id
+            `, [
+              secondChild.rows[0].id,
+              encrypted('second guardian name'),
+              Buffer.alloc(32, 42),
+              encrypted('second guardian phone')
+            ]);
+            const invalidReview = await pool.query(`
+              INSERT INTO guardian_consent_reviews (
+                consent_id, reviewed_by, decision, verification_method, evidence_reference
+              ) VALUES ($1, $2, 'approved', 'document_review', 'ci-review-reference-0002')
+              RETURNING id
+            `, [secondConsent.rows[0].id, stakeholder.rows[0].id]);
+
+            let stakeholderApprovalBlocked = false;
+            try {
+              await pool.query(`
+                UPDATE guardian_consents
+                SET status = 'approved', reviewed_by = $2,
+                    reviewed_at = now(), granted_at = now(), latest_review_id = $3
+                WHERE id = $1
+              `, [secondConsent.rows[0].id, stakeholder.rows[0].id, invalidReview.rows[0].id]);
+            } catch (error) {
+              stakeholderApprovalBlocked = String(error.message).includes('active coordinator');
+            }
+            if (!stakeholderApprovalBlocked) fail('Stakeholder was able to approve guardian consent');
+
+            process.stdout.write('Guardian consent review integrity passed\\n');
           } finally {
             await pool.end();
           }
