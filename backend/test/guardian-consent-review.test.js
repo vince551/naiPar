@@ -16,12 +16,16 @@ function createFakePool({
   role = 'coordinator',
   consentStatus = 'pending',
   accountStatus = 'pending',
+  coordinatorCounty = 'Mombasa',
+  childCounty = 'Mombasa',
   failAudit = false
 } = {}) {
   const state = {
     role,
     consentStatus,
     accountStatus,
+    coordinatorCounty,
+    childCounty,
     reviews: [],
     audits: [],
     released: false,
@@ -54,14 +58,14 @@ function createFakePool({
         }
         return { rows: [], rowCount: 0 };
       }
-      if (normalized.startsWith('SELECT id FROM users')) {
+      if (normalized.startsWith('SELECT id, county FROM users')) {
         return role === 'coordinator'
-          ? { rows: [{ id: params[0] }], rowCount: 1 }
+          ? { rows: [{ id: params[0], county: state.coordinatorCounty }], rowCount: 1 }
           : { rows: [], rowCount: 0 };
       }
       if (normalized.includes('FROM guardian_consents gc') &&
           normalized.includes("WHERE gc.status IN ('pending', 'rejected')")) {
-        return {
+        return state.childCounty === params[0] ? {
           rows: [{
             id: CONSENT_ID,
             status: state.consentStatus,
@@ -69,11 +73,11 @@ function createFakePool({
             created_at: '2026-11-10T10:00:00.000Z'
           }],
           rowCount: 1
-        };
+        } : { rows: [], rowCount: 0 };
       }
       if (normalized.includes('gc.guardian_name_ciphertext') &&
           normalized.includes('FOR SHARE OF gc, u')) {
-        return {
+        return state.childCounty === params[1] ? {
           rows: [{
             id: CONSENT_ID,
             consent_status: state.consentStatus,
@@ -89,11 +93,11 @@ function createFakePool({
             ward: 'Nyali'
           }],
           rowCount: 1
-        };
+        } : { rows: [], rowCount: 0 };
       }
       if (normalized.includes('gc.child_user_id') &&
           normalized.includes('FOR UPDATE OF gc, u')) {
-        return {
+        return state.childCounty === params[1] ? {
           rows: [{
             id: CONSENT_ID,
             child_user_id: CHILD_ID,
@@ -102,7 +106,7 @@ function createFakePool({
             account_status: state.accountStatus
           }],
           rowCount: 1
-        };
+        } : { rows: [], rowCount: 0 };
       }
       if (normalized.startsWith('INSERT INTO guardian_consent_reviews')) {
         state.reviews.push({ decision: params[2], method: params[3], reference: params[4] });
@@ -294,4 +298,21 @@ test('audit failure rolls back the review transaction', async () => {
   assert.equal(pool.state.reviews.length, 0);
   assert.ok(pool.calls.some(call => call.sql === 'ROLLBACK'));
   assert.equal(pool.state.released, true);
+});
+
+test('coordinators cannot inspect consent requests outside their assigned county', async () => {
+  const pool = createFakePool({ coordinatorCounty: 'Kilifi', childCounty: 'Mombasa' });
+  const service = createService(pool);
+
+  const queue = await service.listReviewQueue(context);
+  assert.equal(queue.length, 0);
+  await assert.rejects(
+    service.getReviewDetails(CONSENT_ID, context),
+    /not found/
+  );
+  await assert.rejects(
+    service.reviewConsent(CONSENT_ID, approval, context),
+    /not found/
+  );
+  assert.equal(pool.state.reviews.length, 0);
 });
