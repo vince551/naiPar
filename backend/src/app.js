@@ -13,7 +13,14 @@ import {
   AuthenticationValidationError
 } from './domain/authentication.js';
 import { createFieldCrypto } from './security/field-crypto.js';
-import { requireAuthenticated } from './security/authorization.js';
+import { requireAuthenticated, requireRoles } from './security/authorization.js';
+import {
+  createGuardianConsentReviewService,
+  ConsentReviewConflictError,
+  ConsentReviewForbiddenError,
+  ConsentReviewNotFoundError,
+  ConsentReviewValidationError
+} from './domain/guardian-consent-review.js';
 import {
   clearSessionCookie,
   createSessionResolver,
@@ -50,6 +57,7 @@ export function createApp({
     verifySecret,
     dummyCredentialHash
   });
+  const consentReview = createGuardianConsentReviewService({ pool, fieldCrypto });
   const resolveSession = createSessionResolver({ pool, secureCookies });
 
   app.disable('x-powered-by');
@@ -178,6 +186,68 @@ export function createApp({
     }
   });
 
+  const coordinatorReviewAccess = [
+    requireSession,
+    requireAuthenticated,
+    requireRoles('coordinator')
+  ];
+
+  app.get(
+    '/api/v1/coordinator/guardian-consents',
+    ...coordinatorReviewAccess,
+    async (req, res, next) => {
+      try {
+        const data = await consentReview.listReviewQueue({
+          actorUserId: req.auth.userId,
+          requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(200).json({ data });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  app.get(
+    '/api/v1/coordinator/guardian-consents/:consentId',
+    ...coordinatorReviewAccess,
+    async (req, res, next) => {
+      try {
+        const data = await consentReview.getReviewDetails(req.params.consentId, {
+          actorUserId: req.auth.userId,
+          requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(200).json({ data });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  app.post(
+    '/api/v1/coordinator/guardian-consents/:consentId/review',
+    ...coordinatorReviewAccess,
+    requireCsrf,
+    async (req, res, next) => {
+      try {
+        const data = await consentReview.reviewConsent(
+          req.params.consentId,
+          req.body,
+          {
+            actorUserId: req.auth.userId,
+            requestId: req.requestId,
+            networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+          }
+        );
+        res.status(200).json({ data, message: 'Guardian consent review recorded.' });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
   app.get('/api/v1/auth/session', requireAuthenticated, (req, res) => {
     res.status(200).json({
       data: {
@@ -214,6 +284,43 @@ export function createApp({
   });
 
   app.use((error, req, res, _next) => {
+    if (error instanceof ConsentReviewValidationError) {
+      return res.status(400).json({
+        error: {
+          code: 'VALIDATION_FAILED',
+          message: 'Check the review details.',
+          fields: error.fields
+        }
+      });
+    }
+
+    if (error instanceof ConsentReviewForbiddenError) {
+      return res.status(403).json({
+        error: {
+          code: 'COORDINATOR_ACCESS_REQUIRED',
+          message: 'Only an active coordinator may review guardian consent.'
+        }
+      });
+    }
+
+    if (error instanceof ConsentReviewNotFoundError) {
+      return res.status(404).json({
+        error: {
+          code: 'CONSENT_REQUEST_NOT_FOUND',
+          message: 'The guardian consent request was not found.'
+        }
+      });
+    }
+
+    if (error instanceof ConsentReviewConflictError) {
+      return res.status(409).json({
+        error: {
+          code: 'CONSENT_REVIEW_CONFLICT',
+          message: 'This consent request is no longer available for review.'
+        }
+      });
+    }
+
     if (error instanceof RegistrationValidationError ||
         error instanceof AuthenticationValidationError) {
       return res.status(400).json({
