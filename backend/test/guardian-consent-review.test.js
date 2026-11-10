@@ -316,3 +316,14 @@ test('coordinators cannot inspect consent requests outside their assigned county
   );
   assert.equal(pool.state.reviews.length, 0);
 });
+
+test('coordinator without a county assignment cannot open the review queue', async () => {
+  const pool = createFakePool({ coordinatorCounty: null });
+  const service = createService(pool);
+
+  await assert.rejects(
+    service.listReviewQueue(context),
+    ConsentReviewForbiddenError
+  );
+  assert.equal(pool.calls.some(call => call.sql.includes('FROM guardian_consents gc')), false);
+});
