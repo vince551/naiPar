@@ -142,7 +142,8 @@ export function createGuardianPhoneVerificationService({
   fieldCrypto,
   otpPepper,
   smsGateway,
-  generateCode = () => String(randomInt(0, 1_000_000)).padStart(6, '0')
+  generateCode = () => String(randomInt(0, 1_000_000)).padStart(6, '0'),
+  generateChallengeId = () => randomUUID()
 }) {
   if (!pool || typeof fieldCrypto?.hashGuardianPhone !== 'function') {
     throw new TypeError('Guardian phone verification dependencies are incomplete');
@@ -212,7 +213,10 @@ export function createGuardianPhoneVerificationService({
       if (typeof code !== 'string' || !OTP_PATTERN.test(code)) {
         throw new TypeError('OTP generator must return a six-digit string');
       }
-      const challengeId = randomUUID();
+      const challengeId = generateChallengeId();
+      if (typeof challengeId !== 'string' || !UUID_PATTERN.test(challengeId)) {
+        throw new TypeError('Challenge ID generator must return a UUID');
+      }
       const otpHash = createOtpDigest(pepper, consent.id, challengeId, code);
       const inserted = await client.query(
         `INSERT INTO guardian_phone_verification_challenges (
