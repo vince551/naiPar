@@ -1,5 +1,5 @@
 const CHILD_ROLES = new Set(['public_child', 'delegate']);
-const VERIFICATION_METHODS = new Set(['in_person', 'verified_call', 'document_review']);
+const VERIFICATION_METHODS = new Set(['in_person', 'verified_call', 'document_review', 'guardian_otp']);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const EVIDENCE_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/u;
 
@@ -52,7 +52,11 @@ function validateReview(payload) {
 
   if (!['approved', 'rejected'].includes(decision)) fields.push('decision');
   if (!VERIFICATION_METHODS.has(verificationMethod)) fields.push('verificationMethod');
-  if (!EVIDENCE_REFERENCE_PATTERN.test(evidenceReference)) fields.push('evidenceReference');
+  if (verificationMethod === 'guardian_otp') {
+    if (evidenceReference && !EVIDENCE_REFERENCE_PATTERN.test(evidenceReference)) fields.push('evidenceReference');
+  } else if (!EVIDENCE_REFERENCE_PATTERN.test(evidenceReference)) {
+    fields.push('evidenceReference');
+  }
 
   if (fields.length) {
     throw new ConsentReviewValidationError([...new Set(fields)]);
@@ -261,6 +265,8 @@ export function createGuardianConsentReviewService({ pool, fieldCrypto }) {
           gc.id,
           gc.child_user_id,
           gc.status::text AS consent_status,
+          gc.guardian_phone_verified_at,
+          gc.guardian_phone_verification_challenge_id,
           u.role::text AS child_role,
           u.status::text AS account_status
         FROM guardian_consents gc
@@ -281,6 +287,17 @@ export function createGuardianConsentReviewService({ pool, fieldCrypto }) {
         throw new ConsentReviewConflictError();
       }
 
+      if (
+        input.verificationMethod === 'guardian_otp' &&
+        (!consent.guardian_phone_verified_at || !consent.guardian_phone_verification_challenge_id)
+      ) {
+        throw new ConsentReviewConflictError();
+      }
+
+      const evidenceReference = input.verificationMethod === 'guardian_otp'
+        ? consent.guardian_phone_verification_challenge_id
+        : input.evidenceReference;
+
       const reviewResult = await client.query(
         `INSERT INTO guardian_consent_reviews (
           consent_id,
@@ -295,7 +312,7 @@ export function createGuardianConsentReviewService({ pool, fieldCrypto }) {
           actorUserId,
           input.decision,
           input.verificationMethod,
-          input.evidenceReference
+          evidenceReference
         ]
       );
 
