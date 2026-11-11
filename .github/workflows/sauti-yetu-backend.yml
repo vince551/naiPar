@@ -102,7 +102,7 @@ jobs:
               !row.stakeholder_updates_table ||
               !row.public_view ||
               !row.stakeholder_view ||
-              Number(row.migration_count) !== 9
+              Number(row.migration_count) !== 10
             ) {
               throw new Error('One or more expected schema objects are missing');
             }
