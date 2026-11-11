@@ -186,19 +186,15 @@ export function createGuardianPhoneVerificationService({
       const recentResult = await client.query(
         `SELECT
            count(*)::int AS recent_count,
-           max(created_at) AS last_requested_at
+           max(created_at) AS last_requested_at,
+           COALESCE(max(created_at) > now() - interval '60 seconds', false) AS cooldown_active
          FROM guardian_phone_verification_challenges
          WHERE consent_id = $1
            AND created_at > now() - interval '1 hour'`,
         [consent.id]
       );
       const recent = recentResult.rows?.[0] || {};
-      const lastRequestedAt = recent.last_requested_at
-        ? new Date(recent.last_requested_at).getTime()
-        : 0;
-      const cooldownActive = lastRequestedAt > Date.now() - 60_000;
-
-      if (Number(recent.recent_count || 0) >= 3 || cooldownActive) {
+      if (Number(recent.recent_count || 0) >= 3 || recent.cooldown_active === true) {
         return null;
       }
 
