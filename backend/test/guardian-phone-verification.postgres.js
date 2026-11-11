@@ -1,12 +1,13 @@
 import pg from 'pg';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 const { Pool } = pg;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const encrypted = label => Buffer.from(`synthetic encrypted ${label}`);
-const phoneHash = () => Buffer.from(randomUUID().replaceAll('-', '').slice(0, 32), 'hex');
+const phoneHash = () => randomBytes(32);
 
 async function createChild({ county, label }) {
+  const lookupHash = phoneHash();
   const child = await pool.query(
     `INSERT INTO users (
       full_name, full_name_ciphertext, role, status, age,
@@ -17,7 +18,7 @@ async function createChild({ county, label }) {
       NULL, $2, $3, 'Synthetic Ward', $4, $5, '$argon2id$synthetic'
     )
     RETURNING id`,
-    [encrypted(`${label} child`), encrypted(`${label} school`), county, phoneHash(), encrypted(`${label} guardian phone`)]
+    [encrypted(`${label} child`), encrypted(`${label} school`), county, lookupHash, encrypted(`${label} guardian phone`)]
   );
   const childId = child.rows[0].id;
   const consent = await pool.query(
@@ -27,9 +28,9 @@ async function createChild({ county, label }) {
       consent_text_version, status
     ) VALUES ($1, NULL, $2, $3, $4, 'ci-otp-test-v1', 'pending')
     RETURNING id`,
-    [childId, encrypted(`${label} guardian name`), phoneHash(), encrypted(`${label} guardian phone`)]
+    [childId, encrypted(`${label} guardian name`), lookupHash, encrypted(`${label} guardian phone`)]
   );
-  return { childId, consentId: consent.rows[0].id };
+  return { childId, consentId: consent.rows[0].id, lookupHash };
 }
 
 async function expectFailure(work, expectedText, label) {
@@ -84,7 +85,7 @@ try {
       consent_id, phone_lookup_hash, otp_hash, expires_at
     ) VALUES ($1, $2, $3, now() + interval '10 minutes')
     RETURNING id`,
-    [valid.consentId, phoneHash(), Buffer.alloc(32, 77)]
+    [valid.consentId, valid.lookupHash, Buffer.alloc(32, 77)]
   );
   const challengeId = challenge.rows[0].id;
 
@@ -142,12 +143,20 @@ try {
   );
 
   const otherCounty = await createChild({ county: 'Kilifi', label: 'cross-county' });
+  const crossCountyReview = await pool.query(
+    `INSERT INTO guardian_consent_reviews (
+      consent_id, reviewed_by, decision, verification_method, evidence_reference
+    ) VALUES ($1, $2, 'approved', 'in_person', 'synthetic-cross-county-0001')
+    RETURNING id`,
+    [otherCounty.consentId, coordinatorId]
+  );
   await expectFailure(
     () => pool.query(
-      `INSERT INTO guardian_consent_reviews (
-        consent_id, reviewed_by, decision, verification_method, evidence_reference
-      ) VALUES ($1, $2, 'approved', 'in_person', 'synthetic-cross-county-0001')`,
-      [otherCounty.consentId, coordinatorId]
+      `UPDATE guardian_consents
+       SET status = 'approved', reviewed_by = $2, reviewed_at = now(),
+           granted_at = now(), latest_review_id = $3
+       WHERE id = $1`,
+      [otherCounty.consentId, coordinatorId, crossCountyReview.rows[0].id]
     ),
     'coordinator county must match',
     'cross-county consent review'
