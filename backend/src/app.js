@@ -15,6 +15,12 @@ import {
 import { createFieldCrypto } from './security/field-crypto.js';
 import { requireAuthenticated, requireRoles } from './security/authorization.js';
 import {
+  createGuardianPhoneVerificationService,
+  GuardianOtpProviderUnavailableError,
+  GuardianOtpValidationError,
+  GuardianOtpVerificationFailedError
+} from './domain/guardian-phone-verification.js';
+import {
   createGuardianConsentReviewService,
   ConsentReviewConflictError,
   ConsentReviewForbiddenError,
@@ -58,6 +64,12 @@ export function createApp({
     dummyCredentialHash
   });
   const consentReview = createGuardianConsentReviewService({ pool, fieldCrypto });
+  const guardianPhoneVerification = createGuardianPhoneVerificationService({
+    pool,
+    fieldCrypto,
+    otpPepper: config.guardianOtpPepper,
+    smsGateway
+  });
   const resolveSession = createSessionResolver({ pool, secureCookies });
 
   app.disable('x-powered-by');
@@ -186,6 +198,67 @@ export function createApp({
     }
   });
 
+  const guardianOtpRequestLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 3,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: {
+      error: {
+        code: 'OTP_REQUEST_RATE_LIMITED',
+        message: 'Too many verification requests. Please try again later.'
+      }
+    }
+  });
+
+  const guardianOtpVerifyLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: {
+      error: {
+        code: 'OTP_VERIFY_RATE_LIMITED',
+        message: 'Too many verification attempts. Please try again later.'
+      }
+    }
+  });
+
+  app.post(
+    '/api/v1/auth/guardian-phone-verification/request',
+    guardianOtpRequestLimiter,
+    async (req, res, next) => {
+      try {
+        const data = await guardianPhoneVerification.requestCode(req.body, {
+          requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(202).json({
+          data,
+          message: 'If the registration details match, a verification code will be sent to the registered guardian phone.'
+        });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  app.post(
+    '/api/v1/auth/guardian-phone-verification/verify',
+    guardianOtpVerifyLimiter,
+    async (req, res, next) => {
+      try {
+        const data = await guardianPhoneVerification.verifyCode(req.body, {
+          requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(200).json({ data });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
   const coordinatorReviewAccess = [
     requireSession,
     requireAuthenticated,
@@ -284,6 +357,34 @@ export function createApp({
   });
 
   app.use((error, req, res, _next) => {
+    if (error instanceof GuardianOtpValidationError) {
+      return res.status(400).json({
+        error: {
+          code: 'GUARDIAN_OTP_VALIDATION_FAILED',
+          message: 'Check the guardian verification details.',
+          fields: error.fields
+        }
+      });
+    }
+
+    if (error instanceof GuardianOtpProviderUnavailableError) {
+      return res.status(503).json({
+        error: {
+          code: 'GUARDIAN_OTP_UNAVAILABLE',
+          message: 'Guardian phone verification is not configured. Please contact the Assembly Secretariat.'
+        }
+      });
+    }
+
+    if (error instanceof GuardianOtpVerificationFailedError) {
+      return res.status(400).json({
+        error: {
+          code: 'GUARDIAN_OTP_INVALID',
+          message: 'The code is invalid, expired or could not be verified.'
+        }
+      });
+    }
+
     if (error instanceof ConsentReviewValidationError) {
       return res.status(400).json({
         error: {
