@@ -14,11 +14,11 @@ const ARGON2_OPTIONS = Object.freeze({
 
 async function start() {
   const config = readConfig();
-  const pool = createDatabasePool(config);
   const smsGateway = createSmsGateway({
     endpoint: config.smsGatewayUrl,
     apiToken: config.smsGatewayToken
   });
+  const pool = createDatabasePool(config);
 
   try {
     // The runtime database role needs application DML only. Schema changes
