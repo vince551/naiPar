@@ -80,6 +80,17 @@ try {
   );
 
   const valid = await createChild({ county: 'Mombasa', label: 'valid' });
+  await expectFailure(
+    () => pool.query(
+      `INSERT INTO guardian_phone_verification_challenges (
+        consent_id, phone_lookup_hash, otp_hash, expires_at
+      ) VALUES ($1, $2, $3, now() + interval '10 minutes')`,
+      [valid.consentId, Buffer.alloc(32, 99), Buffer.alloc(32, 76)]
+    ),
+    'guardian OTP challenge must match',
+    'guardian phone hash mismatch'
+  );
+
   const challenge = await pool.query(
     `INSERT INTO guardian_phone_verification_challenges (
       consent_id, phone_lookup_hash, otp_hash, expires_at
@@ -95,19 +106,20 @@ try {
      WHERE id = $1`,
     [challengeId]
   );
-  const verified = await pool.query(
+  await pool.query(
     `UPDATE guardian_phone_verification_challenges
      SET delivery_status = 'verified', verified_at = now()
-     WHERE id = $1
-     RETURNING verified_at`,
+     WHERE id = $1`,
     [challengeId]
   );
   await pool.query(
     `UPDATE guardian_consents
-     SET guardian_phone_verified_at = $2,
-         guardian_phone_verification_challenge_id = $3
+     SET guardian_phone_verified_at = (
+           SELECT verified_at FROM guardian_phone_verification_challenges WHERE id = $2
+         ),
+         guardian_phone_verification_challenge_id = $2
      WHERE id = $1`,
-    [valid.consentId, verified.rows[0].verified_at, challengeId]
+    [valid.consentId, challengeId]
   );
 
   const review = await pool.query(
@@ -125,6 +137,14 @@ try {
     [valid.consentId, coordinatorId, review.rows[0].id]
   );
 
+  await expectFailure(
+    () => pool.query(
+      'UPDATE guardian_consents SET guardian_phone_lookup_hash = $2 WHERE id = $1',
+      [valid.consentId, phoneHash()]
+    ),
+    'guardian contact changes require',
+    'guardian contact change'
+  );
   await expectFailure(
     () => pool.query(
       'UPDATE guardian_phone_verification_challenges SET otp_hash = $2 WHERE id = $1',
