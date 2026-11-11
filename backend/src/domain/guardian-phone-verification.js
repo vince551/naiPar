@@ -1,4 +1,4 @@
-import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import { normalizeKenyanPhone } from '../security/phone.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -67,9 +67,11 @@ function validateVerification(payload) {
   return Object.freeze({ registrationRequestId, guardianPhone, code });
 }
 
-function createOtpDigest(pepper, consentId, code) {
+function createOtpDigest(pepper, consentId, challengeId, code) {
   return createHmac('sha256', pepper)
     .update(consentId, 'utf8')
+    .update(':', 'utf8')
+    .update(challengeId, 'utf8')
     .update(':', 'utf8')
     .update(code, 'utf8')
     .digest();
@@ -210,20 +212,22 @@ export function createGuardianPhoneVerificationService({
       if (typeof code !== 'string' || !OTP_PATTERN.test(code)) {
         throw new TypeError('OTP generator must return a six-digit string');
       }
-      const otpHash = createOtpDigest(pepper, consent.id, code);
+      const challengeId = randomUUID();
+      const otpHash = createOtpDigest(pepper, consent.id, challengeId, code);
       const inserted = await client.query(
         `INSERT INTO guardian_phone_verification_challenges (
+          id,
           consent_id,
           phone_lookup_hash,
           otp_hash,
           expires_at,
           request_fingerprint
-        ) VALUES ($1, $2, $3, now() + interval '10 minutes', $4)
+        ) VALUES ($1, $2, $3, $4, now() + interval '10 minutes', $5)
         RETURNING id`,
-        [consent.id, phoneLookupHash, otpHash, networkFingerprint || null]
+        [challengeId, consent.id, phoneLookupHash, otpHash, networkFingerprint || null]
       );
       const id = inserted.rows?.[0]?.id;
-      if (!id) throw new Error('Guardian OTP challenge insert returned no identifier');
+      if (!id || id !== challengeId) throw new Error('Guardian OTP challenge insert returned no identifier');
 
       return Object.freeze({ id, code, consentId: consent.id });
     });
@@ -332,7 +336,7 @@ export function createGuardianPhoneVerificationService({
       const challenge = challengeResult.rows?.[0];
       if (!challenge) return { verified: false };
 
-      const expected = createOtpDigest(pepper, consent.id, input.code);
+      const expected = createOtpDigest(pepper, consent.id, challenge.id, input.code);
       const valid = safeDigestEqual(expected, challenge.otp_hash);
 
       if (!valid) {
