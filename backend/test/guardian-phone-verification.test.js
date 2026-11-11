@@ -153,7 +153,8 @@ function createService(pool, { smsGateway, code = '123456' } = {}) {
     },
     otpPepper: OTP_PEPPER,
     smsGateway,
-    generateCode: () => code
+    generateCode: () => code,
+    generateChallengeId: () => CHALLENGE_ID
   });
 }
 
