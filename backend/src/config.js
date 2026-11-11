@@ -34,8 +34,30 @@ export function readConfig(env = process.env) {
   );
   const guardianPhoneLookupPepper = requiredSecret(env, 'GUARDIAN_PHONE_LOOKUP_PEPPER');
   const auditFingerprintPepper = requiredSecret(env, 'AUDIT_FINGERPRINT_PEPPER');
-  if (guardianPhoneLookupPepper === auditFingerprintPepper) {
-    throw new Error('Guardian lookup and audit fingerprint peppers must be different secrets');
+  const guardianOtpPepper = requiredSecret(env, 'GUARDIAN_OTP_PEPPER');
+  const independentPeppers = [guardianPhoneLookupPepper, auditFingerprintPepper, guardianOtpPepper];
+  if (new Set(independentPeppers).size !== independentPeppers.length) {
+    throw new Error('Guardian lookup, audit fingerprint and OTP peppers must be different secrets');
+  }
+
+  const smsGatewayUrl = env.SMS_GATEWAY_URL?.trim() || null;
+  const smsGatewayToken = env.SMS_GATEWAY_TOKEN?.trim() || null;
+  if (Boolean(smsGatewayUrl) !== Boolean(smsGatewayToken)) {
+    throw new Error('SMS_GATEWAY_URL and SMS_GATEWAY_TOKEN must be configured together');
+  }
+  if (smsGatewayUrl) {
+    let parsedSmsGatewayUrl;
+    try {
+      parsedSmsGatewayUrl = new URL(smsGatewayUrl);
+    } catch {
+      throw new Error('SMS_GATEWAY_URL must be a valid HTTPS URL');
+    }
+    if (parsedSmsGatewayUrl.protocol !== 'https:' || parsedSmsGatewayUrl.username || parsedSmsGatewayUrl.password || parsedSmsGatewayUrl.hash) {
+      throw new Error('SMS_GATEWAY_URL must be an HTTPS URL without embedded credentials or fragments');
+    }
+    if (Buffer.byteLength(smsGatewayToken, 'utf8') < 32) {
+      throw new Error('SMS_GATEWAY_TOKEN must contain at least 32 bytes');
+    }
   }
 
   return Object.freeze({
@@ -48,6 +70,9 @@ export function readConfig(env = process.env) {
     consentNoticeVersion: required(env, 'CONSENT_NOTICE_VERSION'),
     encryptionKey,
     guardianPhoneLookupPepper,
-    auditFingerprintPepper
+    auditFingerprintPepper,
+    guardianOtpPepper,
+    smsGatewayUrl,
+    smsGatewayToken
   });
 }
