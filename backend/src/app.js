@@ -40,7 +40,8 @@ export function createApp({
   config,
   hashPassphrase,
   verifySecret,
-  dummyCredentialHash
+  dummyCredentialHash,
+  smsGateway
 }) {
   if (!pool || !config) throw new TypeError('API dependencies are incomplete');
 
