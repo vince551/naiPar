@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { readConfig } from './config.js';
 import { createApp } from './app.js';
 import { createDatabasePool } from './db/pool.js';
+import { createSmsGateway } from './integrations/sms-gateway.js';
 
 const ARGON2_OPTIONS = Object.freeze({
   type: argon2.argon2id,
@@ -14,6 +15,10 @@ const ARGON2_OPTIONS = Object.freeze({
 async function start() {
   const config = readConfig();
   const pool = createDatabasePool(config);
+  const smsGateway = createSmsGateway({
+    endpoint: config.smsGatewayUrl,
+    apiToken: config.smsGatewayToken
+  });
 
   try {
     // The runtime database role needs application DML only. Schema changes
@@ -36,7 +41,8 @@ async function start() {
       config,
       hashPassphrase: secret => argon2.hash(secret, ARGON2_OPTIONS),
       verifySecret: (encodedHash, secret) => argon2.verify(encodedHash, secret),
-      dummyCredentialHash
+      dummyCredentialHash,
+      smsGateway
     });
 
     const server = app.listen(config.port, '0.0.0.0', () => {
