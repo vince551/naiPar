@@ -211,3 +211,49 @@ A public child must not access the official hall or vote. A stakeholder must not
 The automated unit suite uses synthetic fixtures and fake database connections. It tests validation, phone normalisation, AES-GCM encryption/tamper rejection, atomic registration rollback, role guards, county-scoped coordinator consent review, audited identity reads, review/activation transaction ordering, rejection and rollback behaviour, migration transaction handling/checksum-drift detection, Argon2 verification paths, generic login failures, session-token hashing, cookie flags and CSRF checks.
 
 The SQL migrations are executed in CI against a disposable PostgreSQL 16 service, including checks for core tables/views, session-revocation triggers, append-only review history, coordinator-only consent approval and county-scope enforcement. No persistent development/staging database is configured. The API has not been deployed or connected to the frontend. Passing unit tests does not establish production readiness.
+
+
+## Guardian phone OTP verification (migration 0009)
+
+The API now provides a provider-neutral guardian phone possession check:
+
+- `POST /api/v1/auth/guardian-phone-verification/request`
+  - Body: `{ "registrationRequestId": "<child registration UUID>", "guardianPhone": "+2547..." }`
+  - Returns the same generic `202 Accepted` response for unknown registrations, mismatched phone numbers, cooldowns and successful dispatches.
+- `POST /api/v1/auth/guardian-phone-verification/verify`
+  - Body: `{ "registrationRequestId": "<child registration UUID>", "guardianPhone": "+2547...", "code": "123456" }`
+  - Returns success only after the latest delivered, unexpired code is verified.
+
+Challenge controls:
+
+- Cryptographically random six-digit code; only an HMAC-SHA-256 digest is stored, keyed with the independent `GUARDIAN_OTP_PEPPER`.
+- Ten-minute expiry, five failed attempts, three challenge creations per consent per hour, and a 60-second resend cooldown.
+- The database permits only one pending/sent challenge per consent at a time.
+- Challenges and their verification evidence cannot be deleted or rewritten.
+- Delivery failure is recorded without exposing whether a child registration exists.
+- The API never returns the OTP or guardian phone number.
+- OTP success records phone possession only. It does **not** approve guardian consent or activate the child account.
+
+### SMS gateway configuration
+
+No SMS vendor or credentials are bundled. Configure an approved HTTPS relay using both `SMS_GATEWAY_URL` and `SMS_GATEWAY_TOKEN`. The relay must accept:
+
+- `POST` to the configured HTTPS URL
+- `Authorization: Bearer <token>`
+- `Content-Type: application/json`
+- `Idempotency-Key: <challenge UUID>`
+- JSON body: `{ "to": "+2547...", "message": "..." }`
+
+A 2xx response means the relay accepted the message. The API uses an eight-second timeout, rejects redirects, and does not log the response body. If the gateway is not configured, OTP endpoints fail closed with `503 GUARDIAN_OTP_UNAVAILABLE`. A configured gateway delivery failure produces the generic accepted response and marks the challenge failed.
+
+Generate `GUARDIAN_OTP_PEPPER` independently from the guardian phone lookup and audit fingerprint peppers. Keep all three secrets and the SMS gateway token in the server's secret manager, never in the frontend or repository.
+
+### Consent and safeguarding boundary
+
+A successful OTP is only evidence that someone can receive messages at the phone number supplied at child registration. It does not establish that the phone holder is the child's legal guardian, nor does it prove informed consent. An authorised coordinator must still complete the separate review and record an approved verification method. When `guardian_otp` is selected for that review, the database requires the successful OTP challenge to be linked to the consent record. Existing in-person and document-review methods remain available under the documented safeguarding procedure.
+
+The OTP endpoints are not yet connected to the React registration screen. The SMS relay is not configured in this repository, so the checked-in server will not send messages until the operator supplies a real, approved relay endpoint and secret. Do not use real child records before provider verification, coordinator training, privacy review and deployment hardening.
+
+### Operational rate-limit note
+
+The Express request/verification IP limiters use the default in-process store. The database also enforces per-consent resend limits, but a multi-instance production deployment must use a shared rate-limit store (for example, a managed Redis-compatible store) and provider-side spend/abuse controls.
