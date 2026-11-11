@@ -64,7 +64,7 @@ function createFakePool({
         };
       }
       if (normalized.startsWith('UPDATE guardian_phone_verification_challenges SET delivery_status = \'expired\'')) {
-        if (state.challenge && ['pending', 'sent'].includes(state.challenge.deliveryStatus)) {
+        if (!normalized.includes('expires_at <= now()') && state.challenge && ['pending', 'sent'].includes(state.challenge.deliveryStatus)) {
           state.challenge.deliveryStatus = 'expired';
         }
         return { rows: [], rowCount: 1 };
