@@ -31,7 +31,8 @@ async function migrate() {
 migrate().catch(error => {
   console.error(JSON.stringify({
     event: 'database_migration_failed',
-    errorType: error?.name || 'Error'
+    errorType: error?.name || 'Error',
+    errorMessage: error?.cause?.message || error?.message || 'Unknown migration error'
   }));
   process.exitCode = 1;
 });
