@@ -372,21 +372,26 @@ export function createGuardianPhoneVerificationService({
            AND delivery_status = 'sent'
            AND expires_at > now()
            AND attempts < $2
-         RETURNING verified_at`,
+         RETURNING id`,
         [challenge.id, MAX_ATTEMPTS]
       );
-      const verifiedAt = verified.rows?.[0]?.verified_at;
-      if (!verifiedAt) return { verified: false };
+      if (verified.rowCount !== 1) return { verified: false };
 
+      // Copy the timestamp inside PostgreSQL rather than round-tripping it
+      // through JavaScript Date (which truncates PostgreSQL microseconds).
       const updatedConsent = await client.query(
         `UPDATE guardian_consents
-         SET guardian_phone_verified_at = $2,
-             guardian_phone_verification_challenge_id = $3
+         SET guardian_phone_verified_at = (
+               SELECT verified_at
+               FROM guardian_phone_verification_challenges
+               WHERE id = $2
+             ),
+             guardian_phone_verification_challenge_id = $2
          WHERE id = $1
            AND guardian_phone_verified_at IS NULL
            AND status IN ('pending', 'rejected')
          RETURNING id`,
-        [consent.id, verifiedAt, challenge.id]
+        [consent.id, challenge.id]
       );
       if (updatedConsent.rowCount !== 1) {
         throw new GuardianOtpVerificationFailedError();
