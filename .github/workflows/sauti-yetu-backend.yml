@@ -57,6 +57,7 @@ jobs:
       GUARDIAN_PHONE_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       GUARDIAN_PHONE_LOOKUP_PEPPER: ci-guardian-lookup-pepper-32-bytes
       AUDIT_FINGERPRINT_PEPPER: ci-audit-fingerprint-pepper-32-bytes
+      GUARDIAN_OTP_PEPPER: ci-guardian-otp-pepper-32-bytes
       CONSENT_NOTICE_VERSION: ci-test-v1
     steps:
       - name: Check out repository
@@ -85,6 +86,7 @@ jobs:
                 to_regclass('public.guardian_consents') AS consent_table,
                 to_regclass('public.auth_sessions') AS sessions_table,
                 to_regclass('public.guardian_consent_reviews') AS consent_reviews_table,
+                to_regclass('public.guardian_phone_verification_challenges') AS guardian_otp_table,
                 to_regclass('public.stakeholder_updates') AS stakeholder_updates_table,
                 to_regclass('public.public_concern_summary') AS public_view,
                 to_regclass('public.stakeholder_resolution_summary') AS stakeholder_view,
@@ -96,10 +98,11 @@ jobs:
               !row.consent_table ||
               !row.sessions_table ||
               !row.consent_reviews_table ||
+              !row.guardian_otp_table ||
               !row.stakeholder_updates_table ||
               !row.public_view ||
               !row.stakeholder_view ||
-              Number(row.migration_count) !== 8
+              Number(row.migration_count) !== 9
             ) {
               throw new Error('One or more expected schema objects are missing');
             }
@@ -418,6 +421,8 @@ jobs:
             await pool.end();
           }
           NODE
+      - name: Verify guardian OTP PostgreSQL integrity
+        run: node test/guardian-phone-verification.postgres.js
       - name: Smoke-test API health endpoints
         run: |
           node src/server.js > /tmp/sauti-yetu-api.log 2>&1 &
