@@ -422,7 +422,7 @@ jobs:
           }
           NODE
       - name: Verify guardian OTP PostgreSQL integrity
-        run: node test/guardian-phone-verification.postgres.js
+        run: node scripts/verify-guardian-otp-postgres.js
       - name: Smoke-test API health endpoints
         run: |
           node src/server.js > /tmp/sauti-yetu-api.log 2>&1 &
