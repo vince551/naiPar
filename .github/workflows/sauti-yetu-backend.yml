@@ -57,7 +57,7 @@ jobs:
       GUARDIAN_PHONE_ENCRYPTION_KEY_BASE64: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       GUARDIAN_PHONE_LOOKUP_PEPPER: ci-guardian-lookup-pepper-32-bytes
       AUDIT_FINGERPRINT_PEPPER: ci-audit-fingerprint-pepper-32-bytes
-      GUARDIAN_OTP_PEPPER: ci-guardian-otp-pepper-32-bytes
+      GUARDIAN_OTP_PEPPER: ci-guardian-otp-pepper-32-bytes-test
       CONSENT_NOTICE_VERSION: ci-test-v1
     steps:
       - name: Check out repository
