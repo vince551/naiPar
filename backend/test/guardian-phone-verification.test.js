@@ -71,10 +71,10 @@ function createFakePool({
       }
       if (normalized.startsWith('INSERT INTO guardian_phone_verification_challenges')) {
         state.challenge = {
-          id: CHALLENGE_ID,
-          consentId: params[0],
-          phoneHash: params[1],
-          otpHash: params[2],
+          id: params[0],
+          consentId: params[1],
+          phoneHash: params[2],
+          otpHash: params[3],
           deliveryStatus: 'pending',
           attempts: 0,
           sentAt: null,
@@ -82,7 +82,7 @@ function createFakePool({
         };
         state.recentCount += 1;
         state.lastRequestedAt = new Date().toISOString();
-        return { rows: [{ id: CHALLENGE_ID }], rowCount: 1 };
+        return { rows: [{ id: params[0] }], rowCount: 1 };
       }
       if (normalized.startsWith('UPDATE guardian_phone_verification_challenges SET delivery_status = \'failed\'')) {
         if (state.challenge?.id === params[0]) state.challenge.deliveryStatus = 'failed';
