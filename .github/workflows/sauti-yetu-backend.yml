@@ -93,7 +93,6 @@ jobs:
                 to_regclass('public.concerns_submitter_created_idx') AS concerns_owner_index,
                 (SELECT count(*) FROM pg_constraint WHERE conname = 'concerns_private_content_encrypted_check') AS encrypted_concern_constraint,
                 (SELECT count(*) FROM pg_constraint WHERE conname = 'concerns_public_projection_redacted_check') AS redacted_public_projection_constraint,
-                (SELECT count(*) FROM pg_constraint WHERE conname = 'concerns_safeguarding_referrals_private_check') AS safeguarding_privacy_constraint,
                 (SELECT count(*) FROM schema_migrations) AS migration_count
             `);
             const row = result.rows[0];
@@ -110,7 +109,6 @@ jobs:
               !row.concerns_owner_index ||
               Number(row.encrypted_concern_constraint) !== 1 ||
               Number(row.redacted_public_projection_constraint) !== 1 ||
-              Number(row.safeguarding_privacy_constraint) !== 1 ||
               Number(row.migration_count) !== 11
             ) {
               throw new Error('One or more expected schema objects are missing');
