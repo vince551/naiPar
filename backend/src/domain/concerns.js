@@ -119,13 +119,17 @@ async function lockEligibleChild(client, actorUserId) {
      FOR UPDATE`,
     [actorUserId]
   );
-  const row = result.rows?.[0];
-  ensureChildAccess(row);
+  ensureChildAccess(result.rows?.[0]);
 }
 
-export function createConcernService({ pool }) {
-  if (!pool || typeof pool.connect !== 'function') {
-    throw new TypeError('A PostgreSQL pool is required');
+export function createConcernService({ pool, fieldCrypto }) {
+  if (
+    !pool ||
+    typeof pool.connect !== 'function' ||
+    typeof fieldCrypto?.encryptField !== 'function' ||
+    typeof fieldCrypto?.decryptField !== 'function'
+  ) {
+    throw new TypeError('Concern service dependencies are incomplete');
   }
 
   async function submitConcern(payload, {
@@ -143,10 +147,19 @@ export function createConcernService({ pool }) {
 
       const inserted = await client.query(
         `INSERT INTO concerns (
-           submitted_by, theme, title, description, is_public
+           submitted_by,
+           theme_ciphertext,
+           title_ciphertext,
+           description_ciphertext,
+           is_public
          ) VALUES ($1, $2, $3, $4, false)
-         RETURNING id, theme, title, status::text AS status, created_at`,
-        [actorUserId, input.theme, input.title, input.description]
+         RETURNING id, status::text AS status, created_at`,
+        [
+          actorUserId,
+          fieldCrypto.encryptField(input.theme),
+          fieldCrypto.encryptField(input.title),
+          fieldCrypto.encryptField(input.description)
+        ]
       );
       const concern = inserted.rows?.[0];
       if (!concern?.id) throw new Error('Concern insert returned no identifier');
@@ -163,14 +176,14 @@ export function createConcernService({ pool }) {
           concern.id,
           requestId || null,
           networkFingerprint || null,
-          JSON.stringify({ theme: input.theme, visibility: 'private' })
+          JSON.stringify({ visibility: 'private', contentEncrypted: true })
         ]
       );
 
       return Object.freeze({
         id: concern.id,
-        theme: concern.theme,
-        title: concern.title,
+        theme: input.theme,
+        title: input.title,
         status: concern.status,
         createdAt: concern.created_at
       });
@@ -191,7 +204,7 @@ export function createConcernService({ pool }) {
 
       const result = await client.query(
         `SELECT
-           id, theme, title, description,
+           id, theme_ciphertext, title_ciphertext, description_ciphertext,
            status::text AS status, created_at, updated_at
          FROM concerns
          WHERE submitted_by = $1
@@ -218,9 +231,9 @@ export function createConcernService({ pool }) {
 
       return rows.map(row => Object.freeze({
         id: row.id,
-        theme: row.theme,
-        title: row.title,
-        description: row.description,
+        theme: fieldCrypto.decryptField(row.theme_ciphertext),
+        title: fieldCrypto.decryptField(row.title_ciphertext),
+        description: fieldCrypto.decryptField(row.description_ciphertext),
         status: row.status,
         createdAt: row.created_at,
         updatedAt: row.updated_at
