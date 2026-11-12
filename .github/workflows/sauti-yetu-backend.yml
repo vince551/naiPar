@@ -97,6 +97,7 @@ jobs:
                 (SELECT count(*) FROM schema_migrations) AS migration_count
             `);
             const row = result.rows[0];
+            process.stdout.write(JSON.stringify(row) + '\\n');
             if (
               !row.users_table ||
               !row.consent_table ||
