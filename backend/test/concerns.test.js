@@ -43,8 +43,6 @@ function createFakePool({ role = 'public_child', status = 'active', consent = tr
             return {
               rows: [{
                 id: concernId,
-                theme: params[1],
-                title: params[2],
                 status: 'submitted',
                 created_at: '2026-11-12T12:00:00.000Z'
               }]
@@ -54,9 +52,9 @@ function createFakePool({ role = 'public_child', status = 'active', consent = tr
             return {
               rows: [{
                 id: concernId,
-                theme: 'Education access',
-                title: 'Improve access to reading materials',
-                description: 'Our community library has too few age-appropriate books for learners.',
+                theme_ciphertext: Buffer.from('encrypted:Education access'),
+                title_ciphertext: Buffer.from('encrypted:Improve access to reading materials'),
+                description_ciphertext: Buffer.from('encrypted:Our community library has too few age-appropriate books for learners.'),
                 status: 'submitted',
                 created_at: '2026-11-12T12:00:00.000Z',
                 updated_at: '2026-11-12T12:00:00.000Z'
@@ -70,6 +68,15 @@ function createFakePool({ role = 'public_child', status = 'active', consent = tr
     }
   };
 }
+
+const fieldCrypto = {
+  encryptField(value) { return Buffer.from(`encrypted:${value}`, 'utf8'); },
+  decryptField(value) {
+    const text = Buffer.from(value).toString('utf8');
+    if (!text.startsWith('encrypted:')) throw new Error('synthetic decrypt failure');
+    return text.slice('encrypted:'.length);
+  }
+};
 
 test('validates concern text and normalises safe whitespace', () => {
   const result = validateConcern({
@@ -118,9 +125,9 @@ test('rejects malformed or oversized concern content', () => {
   );
 });
 
-test('creates private concern and writes a content-minimised audit event', async () => {
+test('creates an encrypted, private concern and writes a content-minimised audit event', async () => {
   const pool = createFakePool();
-  const service = createConcernService({ pool });
+  const service = createConcernService({ pool, fieldCrypto });
 
   const result = await service.submitConcern(validInput(), {
     actorUserId: actorId,
@@ -130,31 +137,32 @@ test('creates private concern and writes a content-minimised audit event', async
 
   assert.equal(result.id, concernId);
   assert.equal(result.status, 'submitted');
+  assert.equal(result.title, validInput().title);
   assert.equal(pool.released, true);
 
   const insert = pool.calls.find(call => call.sql.includes('INSERT INTO concerns'));
   const audit = pool.calls.find(call => call.sql.includes('INSERT INTO audit_logs'));
   assert.ok(insert);
   assert.ok(audit);
-  assert.match(insert.sql, /is_public\s*\)\s*VALUES\s*\(\$1,\s*\$2,\s*\$3,\s*\$4,\s*false\)/iu);
+  assert.match(insert.sql, /theme_ciphertext,\s*title_ciphertext,\s*description_ciphertext,\s*is_public/iu);
+  assert.match(insert.sql, /VALUES \(\$1, \$2, \$3, \$4, false\)/u);
   assert.deepEqual(insert.params, [
     actorId,
-    'Education access',
-    'Improve access to reading materials',
-    'Our community library has too few age-appropriate books for learners.'
+    Buffer.from(`encrypted:${validInput().theme}`),
+    Buffer.from(`encrypted:${validInput().title}`),
+    Buffer.from(`encrypted:${validInput().description}`)
   ]);
-  assert.equal(audit.params[1], concernId);
-  assert.equal(audit.params[5], JSON.stringify({
-    theme: 'Education access',
-    visibility: 'private'
+  assert.equal(audit.params[4], JSON.stringify({
+    visibility: 'private',
+    contentEncrypted: true
   }));
-  assert.ok(!audit.params[5].includes('reading materials'));
+  assert.ok(!audit.params[4].includes('reading materials'));
   assert.ok(pool.calls.some(call => call.sql === 'COMMIT'));
 });
 
-test('lists only the authenticated child own concern records', async () => {
+test('lists only the authenticated child own encrypted concern records', async () => {
   const pool = createFakePool();
-  const service = createConcernService({ pool });
+  const service = createConcernService({ pool, fieldCrypto });
   const rows = await service.listOwnConcerns({
     actorUserId: actorId,
     requestId: 'synthetic-request-002'
@@ -176,7 +184,7 @@ test('rejects suspended, unconsented and non-child accounts before writing', asy
     { role: 'coordinator' }
   ]) {
     const pool = createFakePool(options);
-    const service = createConcernService({ pool });
+    const service = createConcernService({ pool, fieldCrypto });
     await assert.rejects(
       service.submitConcern(validInput(), { actorUserId: actorId }),
       ConcernAccessError
@@ -188,7 +196,7 @@ test('rejects suspended, unconsented and non-child accounts before writing', asy
 
 test('rolls back a concern if the audit write fails', async () => {
   const pool = createFakePool({ failAudit: true });
-  const service = createConcernService({ pool });
+  const service = createConcernService({ pool, fieldCrypto });
   await assert.rejects(
     service.submitConcern(validInput(), { actorUserId: actorId }),
     /synthetic audit failure/u
@@ -199,7 +207,7 @@ test('rolls back a concern if the audit write fails', async () => {
 
 test('rejects requests without a server-authenticated child identity', async () => {
   const pool = createFakePool();
-  const service = createConcernService({ pool });
+  const service = createConcernService({ pool, fieldCrypto });
   await assert.rejects(service.submitConcern(validInput()), ConcernAccessError);
   assert.equal(pool.calls.length, 0);
 });
