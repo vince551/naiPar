@@ -257,3 +257,21 @@ The OTP endpoints are not yet connected to the React registration screen. The SM
 ### Operational rate-limit note
 
 The Express request/verification IP limiters use the default in-process store. The database also enforces per-consent resend limits, but a multi-instance production deployment must use a shared rate-limit store (for example, a managed Redis-compatible store) and provider-side spend/abuse controls.
+
+
+## Private child concern intake (migration 0011)
+
+The authenticated child participation API provides:
+
+- `POST /api/v1/participation/concerns` — submit a private concern.
+- `GET /api/v1/participation/my-concerns` — list only the signed-in child's own submissions.
+
+Both endpoints require an active `public_child` or `delegate` account and currently approved guardian consent. Mutations also require the session CSRF token. The server derives the submitter from the authenticated session; clients cannot supply an owner, county, status, or publication flag.
+
+Private `theme`, `title` and `description` are encrypted with the configured application field-encryption key before storage. Plaintext columns remain NULL. The audit trail stores no narrative or contact details. Obvious email, Kenyan phone-number and URL patterns are rejected at intake as an additional child-safety measure.
+
+New concerns are always private. No public concern feed or stakeholder access endpoint is provided. The public projection now uses only separate `public_theme` and `public_title` fields, which must be deliberately populated with reviewed, de-identified wording before publication. Safeguarding referrals are constrained to remain private.
+
+Migration 0011 deliberately refuses to run if the concerns table already contains records: existing narrative content must be re-encrypted with the application key in a controlled data migration rather than copied in plaintext by SQL.
+
+This slice is not a safeguarding case-management workflow. Children must not submit abuse disclosures through ordinary community concerns; the trained, restricted safeguarding channel remains a separate requirement.
