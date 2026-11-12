@@ -10,7 +10,7 @@
     "start": "node --env-file=.env src/server.js",
     "dev": "node --env-file=.env --watch src/server.js",
     "test": "node --test",
-    "check": "node --check src/server.js && node --check src/migrate-cli.js && node --check src/app.js && node --check src/config.js && node --check src/domain/child-registration.js && node --check src/domain/authentication.js && node --check src/domain/guardian-consent-review.js && node --check src/domain/guardian-phone-verification.js && node --check src/integrations/sms-gateway.js && node --check src/security/field-crypto.js && node --check src/security/phone.js && node --check src/security/authorization.js && node --check src/security/session.js && node --check src/db/pool.js && node --check src/db/migrate.js && node --check scripts/verify-guardian-otp-postgres.js",
+    "check": "node --check src/server.js && node --check src/migrate-cli.js && node --check src/app.js && node --check src/config.js && node --check src/domain/child-registration.js && node --check src/domain/authentication.js && node --check src/domain/guardian-consent-review.js && node --check src/domain/guardian-phone-verification.js && node --check src/domain/concerns.js && node --check src/integrations/sms-gateway.js && node --check src/security/field-crypto.js && node --check src/security/phone.js && node --check src/security/authorization.js && node --check src/security/session.js && node --check src/db/pool.js && node --check src/db/migrate.js && node --check scripts/verify-guardian-otp-postgres.js",
     "migrate": "node --env-file=.env src/migrate-cli.js"
   },
   "dependencies": {
