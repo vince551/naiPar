@@ -28,6 +28,11 @@ import {
   ConsentReviewValidationError
 } from './domain/guardian-consent-review.js';
 import {
+  createConcernService,
+  ConcernAccessError,
+  ConcernValidationError
+} from './domain/concerns.js';
+import {
   clearSessionCookie,
   createSessionResolver,
   requireCsrf,
@@ -65,6 +70,7 @@ export function createApp({
     dummyCredentialHash
   });
   const consentReview = createGuardianConsentReviewService({ pool, fieldCrypto });
+  const concerns = createConcernService({ pool, fieldCrypto });
   const guardianPhoneVerification = createGuardianPhoneVerificationService({
     pool,
     fieldCrypto,
@@ -322,6 +328,64 @@ export function createApp({
     }
   );
 
+  const childParticipationAccess = [
+    requireSession,
+    requireAuthenticated,
+    requireRoles('public_child', 'delegate')
+  ];
+
+  const concernSubmissionLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: {
+      error: {
+        code: 'CONCERN_SUBMISSION_RATE_LIMITED',
+        message: 'Too many submissions. Please try again later.'
+      }
+    }
+  });
+
+  app.post(
+    '/api/v1/participation/concerns',
+    ...childParticipationAccess,
+    requireCsrf,
+    concernSubmissionLimiter,
+    async (req, res, next) => {
+      try {
+        const data = await concerns.submitConcern(req.body, {
+          actorUserId: req.auth.userId,
+          requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(201).json({
+          data,
+          message: 'Your concern was submitted privately for review.'
+        });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  app.get(
+    '/api/v1/participation/my-concerns',
+    ...childParticipationAccess,
+    async (req, res, next) => {
+      try {
+        const data = await concerns.listOwnConcerns({
+          actorUserId: req.auth.userId,
+          requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(200).json({ data });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
   app.get('/api/v1/auth/session', requireAuthenticated, (req, res) => {
     res.status(200).json({
       data: {
@@ -419,6 +483,25 @@ export function createApp({
         error: {
           code: 'CONSENT_REVIEW_CONFLICT',
           message: 'This consent request is no longer available for review.'
+        }
+      });
+    }
+
+    if (error instanceof ConcernValidationError) {
+      return res.status(400).json({
+        error: {
+          code: 'CONCERN_VALIDATION_FAILED',
+          message: 'Check the concern details and remove private contact information.',
+          fields: error.fields
+        }
+      });
+    }
+
+    if (error instanceof ConcernAccessError) {
+      return res.status(403).json({
+        error: {
+          code: 'CHILD_PARTICIPATION_ACCESS_REQUIRED',
+          message: 'Only an active child or delegate with approved guardian consent may access private concerns.'
         }
       });
     }
