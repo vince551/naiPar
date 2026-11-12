@@ -275,3 +275,6 @@ New concerns are always private. No public concern feed or stakeholder access en
 Migration 0011 deliberately refuses to run if the concerns table already contains records: existing narrative content must be re-encrypted with the application key in a controlled data migration rather than copied in plaintext by SQL.
 
 This slice is not a safeguarding case-management workflow. Children must not submit abuse disclosures through ordinary community concerns; the trained, restricted safeguarding channel remains a separate requirement.
+
+
+PostgreSQL CI also exercises the concern privacy constraints with synthetic ciphertext: plaintext inserts are rejected, new concerns remain absent from the public view, publication requires separately supplied de-identified fields, and safeguarding referrals cannot be published. These checks do not replace a production moderation workflow or a full application-level integration test.
