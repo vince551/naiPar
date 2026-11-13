@@ -33,6 +33,13 @@ import {
   ConcernValidationError
 } from './domain/concerns.js';
 import {
+  createConcernModerationService,
+  ConcernModerationConflictError,
+  ConcernModerationForbiddenError,
+  ConcernModerationNotFoundError,
+  ConcernModerationValidationError
+} from './domain/concern-moderation.js';
+import {
   clearSessionCookie,
   createSessionResolver,
   requireCsrf,
@@ -71,6 +78,7 @@ export function createApp({
   });
   const consentReview = createGuardianConsentReviewService({ pool, fieldCrypto });
   const concerns = createConcernService({ pool, fieldCrypto });
+  const concernModeration = createConcernModerationService({ pool, fieldCrypto });
   const guardianPhoneVerification = createGuardianPhoneVerificationService({
     pool,
     fieldCrypto,
@@ -386,6 +394,113 @@ export function createApp({
     }
   );
 
+  app.get(
+    '/api/v1/coordinator/concerns',
+    ...coordinatorReviewAccess,
+    async (req, res, next) => {
+      try {
+        const data = await concernModeration.listReviewQueue({
+          actorUserId: req.auth.userId,
+          requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(200).json({ data });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  app.get(
+    '/api/v1/coordinator/concerns/:concernId',
+    ...coordinatorReviewAccess,
+    async (req, res, next) => {
+      try {
+        const data = await concernModeration.getConcernDetails(req.params.concernId, {
+          actorUserId: req.auth.userId,
+          requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(200).json({ data });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  app.post(
+    '/api/v1/coordinator/concerns/:concernId/moderation',
+    ...coordinatorReviewAccess,
+    requireCsrf,
+    async (req, res, next) => {
+      try {
+        const data = await concernModeration.moderateConcern(
+          req.params.concernId,
+          req.body,
+          {
+            actorUserId: req.auth.userId,
+            requestId: req.requestId,
+            networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+          }
+        );
+        res.status(200).json({ data, message: 'Concern moderation decision recorded.' });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  app.post(
+    '/api/v1/coordinator/concerns/:concernId/publish',
+    ...coordinatorReviewAccess,
+    requireCsrf,
+    async (req, res, next) => {
+      try {
+        const data = await concernModeration.publishConcern(
+          req.params.concernId,
+          req.body,
+          {
+            actorUserId: req.auth.userId,
+            requestId: req.requestId,
+            networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+          }
+        );
+        res.status(200).json({ data, message: 'De-identified public summary approved.' });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  app.post(
+    '/api/v1/coordinator/concerns/:concernId/unpublish',
+    ...coordinatorReviewAccess,
+    requireCsrf,
+    async (req, res, next) => {
+      try {
+        const data = await concernModeration.unpublishConcern(req.params.concernId, {
+          actorUserId: req.auth.userId,
+          requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(200).json({ data, message: 'Public concern summary withdrawn.' });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  // This endpoint reads only the database's de-identified public projection.
+  // It never queries raw concern narratives or submitter records.
+  app.get('/api/v1/public/concerns', async (_req, res, next) => {
+    try {
+      const data = await concernModeration.listPublicConcerns();
+      res.status(200).json({ data });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get('/api/v1/auth/session', requireAuthenticated, (req, res) => {
     res.status(200).json({
       data: {
@@ -483,6 +598,43 @@ export function createApp({
         error: {
           code: 'CONSENT_REVIEW_CONFLICT',
           message: 'This consent request is no longer available for review.'
+        }
+      });
+    }
+
+    if (error instanceof ConcernModerationValidationError) {
+      return res.status(400).json({
+        error: {
+          code: 'CONCERN_MODERATION_VALIDATION_FAILED',
+          message: 'Check the moderation details and remove private contact information from public wording.',
+          fields: error.fields
+        }
+      });
+    }
+
+    if (error instanceof ConcernModerationForbiddenError) {
+      return res.status(403).json({
+        error: {
+          code: 'COORDINATOR_CONCERN_ACCESS_REQUIRED',
+          message: 'Only an active coordinator assigned to this county may review concerns.'
+        }
+      });
+    }
+
+    if (error instanceof ConcernModerationNotFoundError) {
+      return res.status(404).json({
+        error: {
+          code: 'CONCERN_NOT_FOUND',
+          message: 'The concern was not found in your county review scope.'
+        }
+      });
+    }
+
+    if (error instanceof ConcernModerationConflictError) {
+      return res.status(409).json({
+        error: {
+          code: 'CONCERN_MODERATION_CONFLICT',
+          message: 'The concern has changed or is not eligible for this moderation action.'
         }
       });
     }
