@@ -147,13 +147,16 @@ test('creates an encrypted, private concern and writes a content-minimised audit
   const audit = pool.calls.find(call => call.sql.includes('INSERT INTO audit_logs'));
   assert.ok(insert);
   assert.ok(audit);
-  assert.match(insert.sql, /theme_ciphertext,\s*title_ciphertext,\s*description_ciphertext,\s*is_public/iu);
-  assert.match(insert.sql, /VALUES \(\$1, \$2, \$3, \$4, false\)/u);
+  assert.match(insert.sql, /theme_ciphertext,\s*title_ciphertext,\s*description_ciphertext,\s*county,\s*sub_county,\s*ward,\s*is_public/iu);
+  assert.match(insert.sql, /VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, false\)/u);
   assert.deepEqual(insert.params, [
     actorId,
-    Buffer.from(`encrypted:${validInput().theme}`),
-    Buffer.from(`encrypted:${validInput().title}`),
-    Buffer.from(`encrypted:${validInput().description}`)
+    Buffer.from(\`encrypted:\${validInput().theme}\`),
+    Buffer.from(\`encrypted:\${validInput().title}\`),
+    Buffer.from(\`encrypted:\${validInput().description}\`),
+    'Mombasa',
+    'Nyali',
+    'Kongowea'
   ]);
   assert.equal(audit.params[4], JSON.stringify({
     visibility: 'private',
