@@ -427,7 +427,7 @@ export function createConcernModerationService({ pool, fieldCrypto }) {
         concernId: updated.rows[0].id,
         status: updated.rows[0].status,
         updatedAt: updated.rows[0].updated_at,
-        isPublic: false
+        isPublic: row.is_public === true && !unpublish
       });
     });
   }
