@@ -255,7 +255,7 @@ BEGIN
     END IF;
   ELSIF NEW.event_type = 'unpublished' THEN
     IF concern_is_public
-      OR NEW.from_status IS DISTINCT FROM NEW.to_status
+      OR NEW.to_status::text IS DISTINCT FROM concern_status_value
     THEN
       RAISE EXCEPTION 'unpublication event does not match the private concern';
     END IF;
@@ -311,7 +311,9 @@ FOR EACH ROW EXECUTE FUNCTION require_concern_moderation_history();
 
 -- The public projection intentionally contains no county, sub-county, ward,
 -- submitter ID, guardian data, internal notes or private narrative.
-CREATE OR REPLACE VIEW public_concern_summary WITH (security_barrier = true) AS
+DROP VIEW public_concern_summary;
+
+CREATE VIEW public_concern_summary WITH (security_barrier = true) AS
 SELECT
   id,
   public_theme AS theme,
