@@ -279,6 +279,23 @@ test('moderates a concern, assigns it to the coordinator and encrypts the intern
   assert.ok(pool.calls.some(call => call.sql.includes("set_config('app.actor_user_id'")));
 });
 
+test('keeps an approved public summary visible when a consolidated concern is marked responded', async () => {
+  const { pool, service } = serviceFor({
+    concernStatus: 'consolidated',
+    assignedCoordinator: coordinatorId,
+    isPublic: true,
+    lastModeratedBy: coordinatorId
+  });
+  const result = await service.moderateConcern(concernId, {
+    decision: 'responded'
+  }, { actorUserId: coordinatorId });
+
+  assert.equal(result.status, 'responded');
+  assert.equal(result.isPublic, true);
+  assert.equal(pool.state.isPublic, true);
+  assert.equal(pool.events.filter(params => params[2] === 'unpublished').length, 0);
+});
+
 test('prevents another coordinator from taking over an assigned concern and rejects invalid transitions', async () => {
   const assigned = createFakePool({ assignedCoordinator: secondCoordinatorId });
   const assignedService = createConcernModerationService({ pool: assigned, fieldCrypto });
