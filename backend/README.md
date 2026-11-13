@@ -4,7 +4,7 @@
 
 The repository's frontend remains a React 18 + Vite demonstration. The navy-and-gold MCCeAS / Sauti Yetu interface and all existing frontend files are unchanged by this backend branch.
 
-This branch adds the first runnable API foundation and a narrowly scoped child-registration request endpoint. It does **not** provide a complete or production-ready Assembly service.
+The feature branch now contains a runnable API foundation for child registration, authentication, guardian verification/review and private concern intake/moderation. It does **not** provide a complete or production-ready Assembly service.
 
 ### Implemented in this branch
 
@@ -23,6 +23,10 @@ This branch adds the first runnable API foundation and a narrowly scoped child-r
 - Five-attempt / 15-minute in-memory rate limit on child registration and ten-attempt / 15-minute in-memory rate limit on login.
 - Reusable server-context role guards that deny child/delegate access until guardian consent is approved.
 - County-scoped coordinator consent review queue, restricted identity-detail access with read auditing, and approve/reject decisions tied to an append-only review record.
+- Provider-neutral guardian phone OTP challenges with hashed codes, expiry, attempt limits and a fail-closed SMS gateway adapter; OTP success proves phone possession only and does not activate a child account.
+- Private child concern intake with encrypted narrative fields, owner-only child retrieval and a county/location snapshot for subsequent coordinator routing.
+- County-scoped coordinator concern moderation, encrypted internal notes, explicit status transitions, append-only moderation events and audit logging.
+- De-identified public concern summaries with two-coordinator publication approval, a minimal public projection and unpublish support.
 - Consent approval activates the pending child account only in the same transaction as the review and audit event; rejection leaves the account pending.
 - Unit tests for validation, encryption/tamper detection, transactional rollback, pending consent, login, session cookies, CSRF, role checks and authentication race conditions. CI also verifies PostgreSQL migration execution and security-trigger behaviour.
 
@@ -30,7 +34,7 @@ This branch adds the first runnable API foundation and a narrowly scoped child-r
 
 - Guardian SMS/OTP or another automated, independent guardian confirmation channel. The current coordinator workflow records a manual verification method and opaque evidence reference; it does not itself contact the guardian or prove that a call/document was genuine.
 - Adult account provisioning/registration, password recovery, guardian-assisted child recovery, session listing/device management or MFA.
-- Resource-level API endpoints for sittings, motions, debates, votes, concerns, resolutions and stakeholder updates. The session resolver is present, but those business routes are not yet mounted.
+- Resource-level API endpoints for sittings, motions, debate queues, amendments, votes, resolutions and stakeholder updates. A dedicated safeguarding case-management workflow is also not implemented.
 - Frontend API integration. The current React login and registration remain clearly labelled demonstration flows.
 - A persistent development/staging PostgreSQL environment, deployment, backup/restore or production security review. CI now applies the migrations to a disposable PostgreSQL 16 service.
 
@@ -65,6 +69,10 @@ Migrations in `database/migrations/` are applied in numeric order:
 | `0006_session_revocation.sql` | Revokes sessions after account suspension, role/credential changes or guardian-consent withdrawal; prevents deletion of consent history |
 | `0007_guardian_consent_reviews.sql` | Adds append-only coordinator review records and database enforcement that only an active coordinator can approve/reject consent against a matching review |
 | `0008_guardian_review_county_scope.sql` | Restricts coordinator review to the child's county in both the API service and database trigger |
+| `0009_guardian_phone_otp.sql` | Adds expiring, hashed guardian phone-possession challenges and attempt controls |
+| `0010_guardian_otp_binding.sql` | Binds verified phone-possession evidence to the correct guardian consent record |
+| `0011_concern_intake_privacy.sql` | Encrypts private concern narratives and separates reviewed public wording from private content |
+| `0012_coordinator_concern_moderation.sql` | Adds county-scoped moderation, second-coordinator publication, append-only moderation events and a location-free public projection |
 
 The migration runner wraps each migration and its checksum record in one transaction. It uses a PostgreSQL advisory lock to avoid concurrent migration runs and refuses to continue if an already-applied migration's checksum changes. It runs as a separate command so the API process does not need schema-owner privileges.
 
@@ -284,7 +292,7 @@ PostgreSQL CI also exercises the concern privacy constraints with synthetic ciph
 The moderation workflow adds the following endpoints:
 
 - `GET /api/v1/coordinator/concerns` — lists unassigned or self-assigned concerns in the authenticated coordinator's county. Queue rows contain only the concern ID, status, timestamps and whether it is assigned to the caller.
-- `GET /api/v1/coordinator/concerns/:concernId` — retrieves the private narrative and location for an audited coordinator read within the caller's county. Safeguarding referrals are deliberately excluded from this ordinary queue and detail endpoint.
+- `GET /api/v1/coordinator/concerns/:concernId` — retrieves the private narrative and location for an audited coordinator read within the caller's county, when unassigned/assigned to the caller or at the consolidated/responded second-review stage. Safeguarding referrals and closed concerns are excluded.
 - `POST /api/v1/coordinator/concerns/:concernId/moderation` — assigns an unassigned concern to the coordinator and records a permitted status transition. Body: `{ "decision": "under_review", "internalNote": "Optional internal note" }`.
 - `POST /api/v1/coordinator/concerns/:concernId/publish` — approves a separately written, de-identified public theme/title. Body: `{ "publicTheme": "Education access", "publicTitle": "Improve community library resources" }`.
 - `POST /api/v1/coordinator/concerns/:concernId/unpublish` — removes a previously published projection.
