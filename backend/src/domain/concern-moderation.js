@@ -294,9 +294,14 @@ export function createConcernModerationService({ pool, fieldCrypto }) {
          ) latest ON true
          WHERE c.id = $1
            AND c.county = $2
-           AND c.status <> 'referred_to_safeguarding'
+           AND c.status NOT IN ('closed', 'referred_to_safeguarding')
+           AND (
+             c.assigned_coordinator IS NULL
+             OR c.assigned_coordinator = $3
+             OR c.status IN ('consolidated', 'responded')
+           )
          FOR SHARE OF c`,
-        [concernId, county]
+        [concernId, county, actorUserId]
       );
       const row = result.rows?.[0];
       if (!row) throw new ConcernModerationNotFoundError();
