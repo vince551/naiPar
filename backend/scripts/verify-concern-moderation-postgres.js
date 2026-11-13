@@ -225,7 +225,7 @@ try {
         [safeguardingConcernId, publisherId]
       );
     }),
-    'status IN',
+    'publication requires a second coordinator',
     'A safeguarding referral could be published'
   );
 
