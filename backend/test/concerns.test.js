@@ -35,7 +35,10 @@ function createFakePool({ role = 'public_child', status = 'active', consent = tr
               rows: [{
                 role,
                 status,
-                guardian_consent_approved: consent
+                guardian_consent_approved: consent,
+                county: 'Mombasa',
+                sub_county: 'Nyali',
+                ward: 'Kongowea'
               }]
             };
           }
