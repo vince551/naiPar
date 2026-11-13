@@ -51,6 +51,7 @@ CREATE TABLE concern_moderation_events (
   CHECK (
     (event_type <> 'status_change' OR from_status <> to_status)
     AND (internal_note_ciphertext IS NULL OR octet_length(internal_note_ciphertext) > 0)
+    AND (event_type = 'status_change' OR internal_note_ciphertext IS NULL)
   )
 );
 
@@ -100,11 +101,32 @@ BEGIN
     RAISE EXCEPTION 'a server-authenticated coordinator context is required';
   END IF;
 
-  IF NEW.assigned_coordinator IS DISTINCT FROM OLD.assigned_coordinator
-    AND NEW.assigned_coordinator IS NOT NULL
+  IF NEW.assigned_coordinator IS DISTINCT FROM OLD.assigned_coordinator THEN
+    IF OLD.assigned_coordinator IS NOT NULL
+      OR NEW.assigned_coordinator IS NULL
+      OR NEW.assigned_coordinator::text <> actor_setting
+    THEN
+      RAISE EXCEPTION 'a concern may only be claimed once by the authenticated coordinator';
+    END IF;
+  END IF;
+
+  IF NEW.last_moderated_by IS DISTINCT FROM OLD.last_moderated_by
+    OR NEW.last_moderated_at IS DISTINCT FROM OLD.last_moderated_at
   THEN
-    IF NEW.assigned_coordinator::text <> actor_setting THEN
-      RAISE EXCEPTION 'a coordinator may only claim a concern for their own account';
+    IF NEW.status IS NOT DISTINCT FROM OLD.status THEN
+      RAISE EXCEPTION 'moderation metadata can only change with a status transition';
+    END IF;
+  END IF;
+
+  IF NEW.published_by IS DISTINCT FROM OLD.published_by
+    OR NEW.published_at IS DISTINCT FROM OLD.published_at
+  THEN
+    IF NOT (
+      OLD.is_public = false
+      AND NEW.is_public = true
+      AND NEW.published_by::text = actor_setting
+    ) THEN
+      RAISE EXCEPTION 'publication metadata can only change when a coordinator publishes';
     END IF;
   END IF;
 
