@@ -187,6 +187,24 @@ async function writeAudit(client, {
   );
 }
 
+async function requireRecentDetailRead(client, concernId, actorUserId) {
+  const result = await client.query(
+    `SELECT EXISTS (
+       SELECT 1
+       FROM audit_logs
+       WHERE actor_user_id = $1
+         AND entity_type = 'concern'
+         AND entity_id = $2
+         AND action = 'concern.moderation_details_viewed'
+         AND created_at >= now() - interval '30 minutes'
+     ) AS viewed`,
+    [actorUserId, concernId]
+  );
+  if (result.rows?.[0]?.viewed !== true) {
+    throw new ConcernModerationConflictError();
+  }
+}
+
 async function insertModerationEvent(client, {
   concernId,
   actorUserId,
@@ -443,6 +461,7 @@ export function createConcernModerationService({ pool, fieldCrypto }) {
     return withTransaction(pool, async client => {
       await setActorContext(client, actorUserId);
       const county = await requireActiveCoordinator(client, actorUserId);
+      await requireRecentDetailRead(client, concernId, actorUserId);
       const result = await client.query(
         `SELECT id, status::text AS status, assigned_coordinator,
                 last_moderated_by, is_public
