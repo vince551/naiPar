@@ -88,6 +88,7 @@ jobs:
                 to_regclass('public.guardian_consent_reviews') AS consent_reviews_table,
                 to_regclass('public.guardian_phone_verification_challenges') AS guardian_otp_table,
                 to_regclass('public.stakeholder_updates') AS stakeholder_updates_table,
+                to_regclass('public.concern_moderation_events') AS concern_moderation_events_table,
                 to_regclass('public.public_concern_summary') AS public_view,
                 to_regclass('public.stakeholder_resolution_summary') AS stakeholder_view,
                 to_regclass('public.concerns_submitter_created_idx') AS concerns_owner_index,
@@ -104,12 +105,13 @@ jobs:
               !row.consent_reviews_table ||
               !row.guardian_otp_table ||
               !row.stakeholder_updates_table ||
+              !row.concern_moderation_events_table ||
               !row.public_view ||
               !row.stakeholder_view ||
               !row.concerns_owner_index ||
               Number(row.encrypted_concern_constraint) !== 1 ||
               Number(row.redacted_public_projection_constraint) !== 1 ||
-              Number(row.migration_count) !== 11
+              Number(row.migration_count) !== 12
             ) {
               throw new Error('One or more expected schema objects are missing');
             }
@@ -432,6 +434,8 @@ jobs:
         run: node scripts/verify-guardian-otp-postgres.js
       - name: Verify encrypted concern storage and redacted public projection
         run: node scripts/verify-concern-privacy-postgres.js
+      - name: Verify coordinator concern moderation and public projection integrity
+        run: node scripts/verify-concern-moderation-postgres.js
       - name: Smoke-test API health endpoints
         run: |
           node src/server.js > /tmp/sauti-yetu-api.log 2>&1 &
