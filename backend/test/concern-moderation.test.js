@@ -47,6 +47,15 @@ function createFakePool({
 
   const runQuery = async (sql, params = []) => {
     calls.push({ sql, params });
+    if (sql.includes('SELECT EXISTS') && sql.includes('FROM audit_logs')) {
+      const viewed = calls.some(call =>
+        call.sql.includes('INSERT INTO audit_logs') &&
+        call.params[0] === params[0] &&
+        call.params[1] === 'concern.moderation_details_viewed' &&
+        call.params[2] === params[1]
+      );
+      return { rows: [{ viewed }] };
+    }
     if (sql.includes('SELECT id, county') && sql.includes('FROM users')) {
       return {
         rows: coordinatorStatus === 'active' && coordinatorRole === 'coordinator'
@@ -322,6 +331,7 @@ test('requires a different coordinator to approve a de-identified public project
     assignedCoordinator: secondCoordinatorId,
     lastModeratedBy: secondCoordinatorId
   });
+  await service.getConcernDetails(concernId, { actorUserId: coordinatorId });
   const result = await service.publishConcern(concernId, {
     publicTheme: 'Education access',
     publicTitle: 'Improve community library resources'
@@ -355,12 +365,28 @@ test('rejects public wording containing contact details or unsupported fields', 
   }
 });
 
+test('requires a recent audited detail read before publication', async () => {
+  const { service } = serviceFor({
+    concernStatus: 'consolidated',
+    assignedCoordinator: secondCoordinatorId,
+    lastModeratedBy: secondCoordinatorId
+  });
+  await assert.rejects(
+    service.publishConcern(concernId, {
+      publicTheme: 'Education access',
+      publicTitle: 'Improve community library resources'
+    }, { actorUserId: coordinatorId }),
+    ConcernModerationConflictError
+  );
+});
+
 test('prevents the same coordinator who moderated a concern from publishing it', async () => {
   const { service } = serviceFor({
     concernStatus: 'responded',
     assignedCoordinator: coordinatorId,
     lastModeratedBy: coordinatorId
   });
+  await service.getConcernDetails(concernId, { actorUserId: coordinatorId });
   await assert.rejects(
     service.publishConcern(concernId, {
       publicTheme: 'Education access',
