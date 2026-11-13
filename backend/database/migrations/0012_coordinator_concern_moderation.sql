@@ -105,6 +105,7 @@ BEGIN
     IF OLD.assigned_coordinator IS NOT NULL
       OR NEW.assigned_coordinator IS NULL
       OR NEW.assigned_coordinator::text <> actor_setting
+      OR NEW.status IS NOT DISTINCT FROM OLD.status
     THEN
       RAISE EXCEPTION 'a concern may only be claimed once by the authenticated coordinator';
     END IF;
@@ -169,6 +170,7 @@ BEGIN
         OR NEW.published_by::text <> actor_setting
         OR NEW.status NOT IN ('consolidated', 'responded')
         OR NEW.published_at IS NULL
+        OR NEW.last_moderated_by IS NULL
         OR NEW.published_by IS NOT DISTINCT FROM NEW.last_moderated_by
       THEN
         RAISE EXCEPTION 'publication requires a second coordinator after moderation';
@@ -185,6 +187,18 @@ BEGIN
         OR actor_county IS DISTINCT FROM NEW.county
       THEN
         RAISE EXCEPTION 'an active coordinator assigned to the concern county is required to publish';
+      END IF;
+
+      SELECT role::text, status::text, county
+        INTO actor_role, actor_status, actor_county
+      FROM users
+      WHERE id = NEW.last_moderated_by;
+
+      IF actor_role IS DISTINCT FROM 'coordinator'
+        OR actor_status IS DISTINCT FROM 'active'
+        OR actor_county IS DISTINCT FROM NEW.county
+      THEN
+        RAISE EXCEPTION 'the original moderator must remain an active coordinator in the concern county';
       END IF;
     ELSE
       IF NEW.public_theme IS NOT NULL OR NEW.public_title IS NOT NULL THEN
