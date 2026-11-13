@@ -270,7 +270,7 @@ Both endpoints require an active `public_child` or `delegate` account and curren
 
 Private `theme`, `title` and `description` are encrypted with the configured application field-encryption key before storage. Plaintext columns remain NULL. The audit trail stores no narrative or contact details. Obvious email, Kenyan phone-number and URL patterns are rejected at intake as an additional child-safety measure.
 
-New concerns are always private. No public concern feed or stakeholder access endpoint is provided. The public projection now uses only separate `public_theme` and `public_title` fields, which must be deliberately populated with reviewed, de-identified wording before publication. Safeguarding referrals are constrained to remain private.
+New concerns are always private. A public concern feed is provided only through the de-identified database view; no stakeholder endpoint exposes raw concern records. The public projection now uses only separate `public_theme` and `public_title` fields, which must be deliberately populated with reviewed, de-identified wording before publication. Safeguarding referrals are constrained to remain private.
 
 Migration 0011 deliberately refuses to run if the concerns table already contains records: existing narrative content must be re-encrypted with the application key in a controlled data migration rather than copied in plaintext by SQL.
 
@@ -278,3 +278,37 @@ This slice is not a safeguarding case-management workflow. Children must not sub
 
 
 PostgreSQL CI also exercises the concern privacy constraints with synthetic ciphertext: plaintext inserts are rejected, new concerns remain absent from the public view, publication requires separately supplied de-identified fields, and safeguarding referrals cannot be published. These checks do not replace a production moderation workflow or a full application-level integration test.
+
+## Coordinator concern moderation (migration 0012)
+
+The moderation workflow adds the following endpoints:
+
+- `GET /api/v1/coordinator/concerns` — lists unassigned or self-assigned concerns in the authenticated coordinator's county. Queue rows contain only the concern ID, status, timestamps and whether it is assigned to the caller.
+- `GET /api/v1/coordinator/concerns/:concernId` — retrieves the private narrative and location for an audited coordinator read within the caller's county. Safeguarding referrals are deliberately excluded from this ordinary queue and detail endpoint.
+- `POST /api/v1/coordinator/concerns/:concernId/moderation` — assigns an unassigned concern to the coordinator and records a permitted status transition. Body: `{ "decision": "under_review", "internalNote": "Optional internal note" }`.
+- `POST /api/v1/coordinator/concerns/:concernId/publish` — approves a separately written, de-identified public theme/title. Body: `{ "publicTheme": "Education access", "publicTitle": "Improve community library resources" }`.
+- `POST /api/v1/coordinator/concerns/:concernId/unpublish` — removes a previously published projection.
+- `GET /api/v1/public/concerns` — returns only rows from `public_concern_summary`; it does not query raw concern narratives, submitter records or location fields.
+
+All coordinator routes require an active server-authenticated coordinator session and CSRF protection for mutations. The database and service both require the coordinator's county to match the county snapshot recorded when the child submitted the concern. The submitter, narrative and location snapshot are immutable after intake. New submissions copy county, sub-county and ward from the locked child account row; the public view exposes none of these location fields.
+
+### Moderation and publication safeguards
+
+- Status transitions are explicitly constrained. Closed and safeguarding-referred concerns cannot re-enter the ordinary review workflow.
+- A coordinator can claim an unassigned concern; another coordinator cannot change a concern assigned to a colleague.
+- Internal notes are encrypted and stored in append-only `concern_moderation_events`; the legacy plaintext `moderation_note` column is constrained to remain NULL.
+- Every sensitive detail read, status change, publication and unpublication is audited without including child narratives or internal note text.
+- The database requires an actor ID set transaction-locally by the API service. It validates that the actor is an active coordinator in the concern's county.
+- Database constraints and deferred constraint triggers require matching append-only history events for every status or publication change.
+- Publication is permitted only for `consolidated` or `responded` concerns and requires a second active coordinator in the same county, different from the coordinator who last moderated the concern.
+- Public theme/title are separately supplied, length-validated and screened for obvious email addresses, Kenyan mobile numbers and URLs. A coordinator must still manually verify that wording is genuinely de-identified; automated pattern checks cannot detect every name or identifying detail.
+- Publishing a safeguarding referral is prohibited. Moving a published concern into a status outside the public states automatically withdraws its public projection and records both events.
+- The public view contains only an opaque concern ID, reviewed public theme/title, status and creation timestamp. It excludes submitter identity, county, sub-county, ward, guardian data, internal notes and the private narrative.
+
+The ordinary coordinator API does not expose safeguarding referral details. A dedicated safeguarding workflow, with its own trained roles, access policy, case records and response procedures, must be designed before the system collects or processes abuse disclosures.
+
+### Verification
+
+CI runs `verify-concern-moderation-postgres.js` against disposable PostgreSQL after all migrations. It checks county isolation, coordinator-only moderation, second-reviewer publication, safeguarding non-publication, immutable event history, public-view column minimisation and deferred enforcement that rejects status/publication changes without a matching event. Unit tests cover service validation, county scoping, audit minimisation, transition handling and public projection access.
+
+This workflow is not yet connected to a coordinator React dashboard. The public endpoint is a minimal read-only feed; no child-facing or stakeholder-facing moderation controls have been added. A successful CI run does not constitute a safeguarding, privacy-impact or production deployment approval.
