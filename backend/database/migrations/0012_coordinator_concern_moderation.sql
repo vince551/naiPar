@@ -200,6 +200,18 @@ BEGIN
       THEN
         RAISE EXCEPTION 'the original moderator must remain an active coordinator in the concern county';
       END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM audit_logs
+        WHERE actor_user_id = NEW.published_by
+          AND entity_type = 'concern'
+          AND entity_id = NEW.id
+          AND action = 'concern.moderation_details_viewed'
+          AND created_at >= now() - interval '30 minutes'
+      ) THEN
+        RAISE EXCEPTION 'the second coordinator must review concern details before publication';
+      END IF;
     ELSE
       IF NEW.public_theme IS NOT NULL OR NEW.public_title IS NOT NULL THEN
         RAISE EXCEPTION 'unpublished concerns must clear their public projection';
