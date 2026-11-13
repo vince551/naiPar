@@ -55,6 +55,13 @@ function createFakePool({
       };
     }
     if (sql.includes('LEFT JOIN LATERAL')) {
+      if (
+        state.assignedCoordinator &&
+        state.assignedCoordinator !== coordinatorId &&
+        !['consolidated', 'responded'].includes(state.status)
+      ) {
+        return { rows: [] };
+      }
       return {
         rows: [{
           id: concernId,
@@ -213,6 +220,17 @@ test('returns private concern details only to an active coordinator in the match
   assert.equal(details.location.ward, 'Kongowea');
   assert.ok(pool.calls.some(call => call.sql.includes('concern.moderation_details_viewed')));
   assert.ok(!pool.calls.some(call => call.params.some(value => value === details.privateContent.description)));
+});
+
+test('hides in-progress details assigned to another coordinator', async () => {
+  const { service } = serviceFor({
+    concernStatus: 'under_review',
+    assignedCoordinator: secondCoordinatorId
+  });
+  await assert.rejects(
+    service.getConcernDetails(concernId, { actorUserId: coordinatorId }),
+    ConcernModerationNotFoundError
+  );
 });
 
 test('rejects malformed concern identifiers and hides concerns outside coordinator scope', async () => {
