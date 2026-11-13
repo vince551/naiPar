@@ -86,6 +86,9 @@ function createFakePool({
         }]
       };
     }
+    if (sql.includes('SELECT id, status::text AS status, is_public')) {
+      return { rows: [{ id: concernId, status: state.status, is_public: state.isPublic }] };
+    }
     if (sql.includes('SELECT id, status::text AS status, assigned_coordinator')) {
       return {
         rows: [{
