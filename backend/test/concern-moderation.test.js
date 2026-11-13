@@ -190,7 +190,7 @@ test('lists a minimal county-scoped moderation queue and audits the read', async
   const queueQuery = pool.calls.find(call => call.sql.includes('FROM concerns c'));
   assert.deepEqual(queueQuery.params, [coordinatorId, 'Mombasa']);
   assert.doesNotMatch(queueQuery.sql, /description_ciphertext|submitted_by|guardian/iu);
-  assert.ok(pool.calls.some(call => call.sql.includes('concern.moderation_queue_viewed')));
+  assert.ok(pool.calls.some(call => call.sql.includes('INSERT INTO audit_logs') && call.params[1] === 'concern.moderation_queue_viewed'));
 });
 
 test('denies queue access to inactive, non-coordinator or unassigned-county accounts', async () => {
@@ -218,7 +218,7 @@ test('returns private concern details only to an active coordinator in the match
   assert.equal(details.privateContent.description, 'The community library needs more age-appropriate books.');
   assert.equal(details.latestInternalNote, 'Contact the county education office.');
   assert.equal(details.location.ward, 'Kongowea');
-  assert.ok(pool.calls.some(call => call.sql.includes('concern.moderation_details_viewed')));
+  assert.ok(pool.calls.some(call => call.sql.includes('INSERT INTO audit_logs') && call.params[1] === 'concern.moderation_details_viewed'));
   assert.ok(!pool.calls.some(call => call.params.some(value => value === details.privateContent.description)));
 });
 
@@ -333,7 +333,7 @@ test('requires a different coordinator to approve a de-identified public project
   assert.equal(result.publicTitle, 'Improve community library resources');
   assert.equal(pool.state.isPublic, true);
   assert.ok(pool.events.some(params => params[2] === 'published'));
-  assert.ok(pool.calls.some(call => call.sql.includes('concern.publication_approved')));
+  assert.ok(pool.calls.some(call => call.sql.includes('INSERT INTO audit_logs') && call.params[1] === 'concern.publication_approved'));
 });
 
 test('rejects public wording containing contact details or unsupported fields', async () => {
