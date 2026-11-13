@@ -72,7 +72,9 @@ function ensureChildAccess(row) {
     !row ||
     row.status !== 'active' ||
     !CHILD_ROLES.has(row.role) ||
-    row.guardian_consent_approved !== true
+    row.guardian_consent_approved !== true ||
+    typeof row.county !== 'string' ||
+    !row.county.trim()
   ) {
     throw new ConcernAccessError();
   }
@@ -107,6 +109,9 @@ async function lockEligibleChild(client, actorUserId) {
     `SELECT
        u.role::text AS role,
        u.status::text AS status,
+       u.county,
+       u.sub_county,
+       u.ward,
        EXISTS (
          SELECT 1
          FROM guardian_consents gc
@@ -119,7 +124,9 @@ async function lockEligibleChild(client, actorUserId) {
      FOR UPDATE`,
     [actorUserId]
   );
-  ensureChildAccess(result.rows?.[0]);
+  const child = result.rows?.[0];
+  ensureChildAccess(child);
+  return child;
 }
 
 export function createConcernService({ pool, fieldCrypto }) {
@@ -143,7 +150,7 @@ export function createConcernService({ pool, fieldCrypto }) {
     }
 
     return withTransaction(pool, async client => {
-      await lockEligibleChild(client, actorUserId);
+      const child = await lockEligibleChild(client, actorUserId);
 
       const inserted = await client.query(
         `INSERT INTO concerns (
@@ -151,14 +158,20 @@ export function createConcernService({ pool, fieldCrypto }) {
            theme_ciphertext,
            title_ciphertext,
            description_ciphertext,
+           county,
+           sub_county,
+           ward,
            is_public
-         ) VALUES ($1, $2, $3, $4, false)
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, false)
          RETURNING id, status::text AS status, created_at`,
         [
           actorUserId,
           fieldCrypto.encryptField(input.theme),
           fieldCrypto.encryptField(input.title),
-          fieldCrypto.encryptField(input.description)
+          fieldCrypto.encryptField(input.description),
+          child.county,
+          child.sub_county || null,
+          child.ward || null
         ]
       );
       const concern = inserted.rows?.[0];
