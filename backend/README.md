@@ -32,7 +32,7 @@ The feature branch now contains a runnable API foundation for child registration
 
 ### Not implemented yet
 
-- Guardian SMS/OTP or another automated, independent guardian confirmation channel. The current coordinator workflow records a manual verification method and opaque evidence reference; it does not itself contact the guardian or prove that a call/document was genuine.
+- A configured live SMS gateway and guardian self-service consent. The OTP challenge service and HTTPS gateway adapter exist, but no provider endpoint/token is configured. OTP proves phone possession only; it does not establish legal guardianship or informed consent.
 - Adult account provisioning/registration, password recovery, guardian-assisted child recovery, session listing/device management or MFA.
 - Resource-level API endpoints for sittings, motions, debate queues, amendments, votes, resolutions and stakeholder updates. A dedicated safeguarding case-management workflow is also not implemented.
 - Frontend API integration. The current React login and registration remain clearly labelled demonstration flows.
