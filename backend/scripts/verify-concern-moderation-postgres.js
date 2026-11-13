@@ -167,9 +167,10 @@ try {
     'Unpublishing without an append-only event was not rejected'
   );
 
+  const stakeholderConcernId = await createConcern();
   await expectRejected(
     () => runAs(stakeholderId, client => changeStatus(
-      client, concernId, stakeholderId, 'consolidated', 'responded'
+      client, stakeholderConcernId, stakeholderId, 'submitted', 'under_review'
     )),
     'active coordinator',
     'Stakeholder was able to moderate a concern'
