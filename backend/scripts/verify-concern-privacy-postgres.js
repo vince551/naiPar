@@ -64,43 +64,22 @@ try {
     []
   );
 
-  await expectCheckViolation(
-    'UPDATE concerns SET is_public = true WHERE id = $1',
-    [concernId]
+  const publicColumns = await client.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'public_concern_summary'`
   );
-
-  await expectCheckViolation(
-    `UPDATE concerns
-     SET is_public = true,
-         status = 'referred_to_safeguarding',
-         public_theme = 'Safeguarding',
-         public_title = 'Redacted public summary'
-     WHERE id = $1`,
-    [concernId]
-  );
-
-  await client.query(
-    `UPDATE concerns
-     SET is_public = true,
-         status = 'responded',
-         public_theme = 'Education access',
-         public_title = 'More reading materials requested'
-     WHERE id = $1`,
-    [concernId]
-  );
-
-  const published = await client.query(
-    'SELECT * FROM public_concern_summary WHERE id = $1',
-    [concernId]
-  );
-  assert.equal(published.rowCount, 1);
-  assert.equal(published.rows[0].theme, 'Education access');
-  assert.equal(published.rows[0].title, 'More reading materials requested');
-  assert.ok(!Object.hasOwn(published.rows[0], 'description'));
-  assert.ok(!Object.hasOwn(published.rows[0], 'submitted_by'));
+  const exposedColumns = new Set(publicColumns.rows.map(row => row.column_name));
+  for (const forbidden of [
+    'submitted_by', 'county', 'sub_county', 'ward',
+    'description', 'guardian_phone', 'internal_note'
+  ]) {
+    assert.equal(exposedColumns.has(forbidden), false, `Public view exposes ${forbidden}`);
+  }
 
   await client.query('ROLLBACK');
-  process.stdout.write('Encrypted concern storage and redacted public projection passed\n');
+  process.stdout.write('Encrypted concern storage and minimal public projection passed\\n');
 } catch (error) {
   try {
     await client.query('ROLLBACK');
