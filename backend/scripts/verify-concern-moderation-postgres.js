@@ -53,6 +53,15 @@ async function createConcern(county = 'Mombasa') {
   return result.rows[0].id;
 }
 
+async function recordDetailRead(actorId, concernId) {
+  await pool.query(
+    `INSERT INTO audit_logs (
+       actor_user_id, action, entity_type, entity_id, metadata
+     ) VALUES ($1, 'concern.moderation_details_viewed', 'concern', $2, $3::jsonb)`,
+    [actorId, concernId, JSON.stringify({ status: 'consolidated' })]
+  );
+}
+
 async function runAs(actorId, work) {
   const client = await pool.connect();
   try {
@@ -112,6 +121,7 @@ try {
     changeStatus(client, concernId, moderatorId, 'under_review', 'consolidated')
   );
 
+  await recordDetailRead(publisherId, concernId);
   await runAs(publisherId, async client => {
     await client.query(
       `UPDATE concerns
@@ -192,6 +202,7 @@ try {
   await runAs(moderatorId, client =>
     changeStatus(client, sameReviewerConcernId, moderatorId, 'under_review', 'consolidated')
   );
+  await recordDetailRead(moderatorId, sameReviewerConcernId);
   await expectRejected(
     () => runAs(moderatorId, async client => {
       await client.query(
