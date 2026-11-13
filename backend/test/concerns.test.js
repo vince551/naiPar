@@ -151,9 +151,9 @@ test('creates an encrypted, private concern and writes a content-minimised audit
   assert.match(insert.sql, /VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, false\)/u);
   assert.deepEqual(insert.params, [
     actorId,
-    Buffer.from(\`encrypted:\${validInput().theme}\`),
-    Buffer.from(\`encrypted:\${validInput().title}\`),
-    Buffer.from(\`encrypted:\${validInput().description}\`),
+    Buffer.from(`encrypted:${validInput().theme}`),
+    Buffer.from(`encrypted:${validInput().title}`),
+    Buffer.from(`encrypted:${validInput().description}`),
     'Mombasa',
     'Nyali',
     'Kongowea'
