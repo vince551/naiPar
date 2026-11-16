@@ -37,7 +37,7 @@ MCCeAS means **Mombasa County Children E-Assembly**. “Sauti Yetu” is the pla
 
 ## Backend development status
 
-The API is an early development foundation, not a production Assembly service. See [backend/README.md](backend/README.md) for local setup, migration instructions, the implemented pending-registration flow, tests and security limitations. Do not enter real children's information until independent guardian verification, session authentication, safeguarding workflows and production security review are complete.
+The API now includes child registration, login/session handling, guardian phone OTP, coordinator consent review, private concern intake and moderation. The React login, registration/OTP and private concern forms are connected to these routes; official Assembly screens remain illustrative. See [backend/README.md](backend/README.md) for local setup, migrations, tests and security limitations. The API is not deployed and has no persistent staging database or configured SMS provider. Do not enter real children's information or real credentials.
 
 
 ## Connect the browser to the API
