@@ -100,3 +100,21 @@ test('API client does not expose non-JSON server error bodies', async () => {
     error => error instanceof ApiError && error.status === 502 && error.code === 'API_ERROR'
   );
 });
+
+test('session restoration obtains a fresh CSRF token using a JSON POST', async () => {
+  let request;
+  const api = createApiClient({
+    fetchImpl: async (url, options) => {
+      request = { url, options };
+      return response(200, { data: { csrfToken: 'synthetic-refreshed-csrf' } });
+    }
+  });
+
+  const result = await api.refreshCsrf();
+  assert.equal(result.csrfToken, 'synthetic-refreshed-csrf');
+  assert.equal(request.url, '/api/v1/auth/csrf');
+  assert.equal(request.options.method, 'POST');
+  assert.equal(request.options.headers['Content-Type'], 'application/json');
+  assert.deepEqual(JSON.parse(request.options.body), {});
+  assert.equal(request.options.credentials, 'include');
+});
