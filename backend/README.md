@@ -320,3 +320,8 @@ The ordinary coordinator API does not expose safeguarding referral details. A de
 CI runs `verify-concern-moderation-postgres.js` against disposable PostgreSQL after all migrations. It checks county isolation, coordinator-only moderation, second-reviewer publication, safeguarding non-publication, immutable event history, public-view column minimisation and deferred enforcement that rejects status/publication changes without a matching event. Unit tests cover service validation, county scoping, audit minimisation, transition handling and public projection access.
 
 This workflow is not yet connected to a coordinator React dashboard. The public endpoint is a minimal read-only feed; no child-facing or stakeholder-facing moderation controls have been added. A successful CI run does not constitute a safeguarding, privacy-impact or production deployment approval.
+
+
+### CSRF token refresh for browser clients
+
+After a browser reload, the HttpOnly session cookie remains available but the raw CSRF token is intentionally not recoverable from its stored hash. The client first calls `GET /api/v1/auth/session`, then sends `POST /api/v1/auth/csrf` with an `application/json` body of `{}`. This endpoint requires a live authenticated session, rotates the stored CSRF digest, and returns the new raw token once. It is rate-limited and rejects form-encoded requests; the API does not enable cross-origin CORS. Keep the returned token in application memory only. All cookie-authenticated mutations continue to require `x-csrf-token`.
