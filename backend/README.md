@@ -2,7 +2,7 @@
 
 ## Current state
 
-The repository's frontend remains a React 18 + Vite demonstration. The navy-and-gold MCCeAS / Sauti Yetu interface and all existing frontend files are unchanged by this backend branch.
+The repository uses React 18 + Vite with the navy-and-gold MCCeAS / Sauti Yetu visual identity preserved. The login, registration/guardian OTP and private concern submission forms are now connected to the API. The Assembly Hall, agenda, member register, motions, voting, Hansard and stakeholder screens remain illustrative; no official parliamentary action is live.
 
 The feature branch now contains a runnable API foundation for child registration, authentication, guardian verification/review and private concern intake/moderation. It does **not** provide a complete or production-ready Assembly service.
 
@@ -17,9 +17,9 @@ The feature branch now contains a runnable API foundation for child registration
 - `POST /api/v1/auth/child/registration-requests`: creates a pending child account and pending guardian-consent record in one database transaction.
 - `POST /api/v1/auth/login`: verifies child/delegate credentials against guardian-phone lookup plus passphrase, or adult work email plus password. Child sign-in is allowed only for an active account with approved, non-withdrawn consent.
 - Opaque 256-bit session tokens stored only as SHA-256 digests, issued in HttpOnly, SameSite=Lax cookies; Secure is enabled in production.
-- Eight-hour server-side sessions, revocation on logout or inactive account status, trusted database-backed role/consent context, CSRF token validation for logout, and login-attempt records that retain only a keyed network fingerprint and outcome.
+- Eight-hour server-side sessions, revocation on logout or inactive account status, trusted database-backed role/consent context, CSRF token validation for mutations, JSON-only CSRF token refresh after browser reload, and login-attempt records that retain only a keyed network fingerprint and outcome.
 - Account status, role and credential hash are rechecked under a user-row lock immediately before issuing a session; child consent is also rechecked under lock.
-- `GET /api/v1/auth/session` and `POST /api/v1/auth/logout`.
+- `GET /api/v1/auth/session`, `POST /api/v1/auth/csrf` and `POST /api/v1/auth/logout`.
 - Five-attempt / 15-minute in-memory rate limit on child registration and ten-attempt / 15-minute in-memory rate limit on login.
 - Reusable server-context role guards that deny child/delegate access until guardian consent is approved.
 - County-scoped coordinator consent review queue, restricted identity-detail access with read auditing, and approve/reject decisions tied to an append-only review record.
@@ -35,10 +35,10 @@ The feature branch now contains a runnable API foundation for child registration
 - A configured live SMS gateway and guardian self-service consent. The OTP challenge service and HTTPS gateway adapter exist, but no provider endpoint/token is configured. OTP proves phone possession only; it does not establish legal guardianship or informed consent.
 - Adult account provisioning/registration, password recovery, guardian-assisted child recovery, session listing/device management or MFA.
 - Resource-level API endpoints for sittings, motions, debate queues, amendments, votes, resolutions and stakeholder updates. A dedicated safeguarding case-management workflow is also not implemented.
-- Frontend API integration. The current React login and registration remain clearly labelled demonstration flows.
+- Official Assembly frontend integration for sittings, order papers, motions, debates, amendments, delegate voting, Hansard, member records and stakeholder action. The existing screens for these areas still use illustrative data.
 - A persistent development/staging PostgreSQL environment, deployment, backup/restore or production security review. CI now applies the migrations to a disposable PostgreSQL 16 service.
 
-Do not collect real children's information through this API until guardian verification, session authentication, access control, safeguarding procedures and deployment controls are complete.
+Do not collect real children's information or real credentials through this development integration. There is no persistent staging database or production deployment, the SMS relay is not configured, and safeguarding/privacy review is still required.
 
 ## Architecture
 
