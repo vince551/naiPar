@@ -470,3 +470,10 @@ input,textarea,select{accent-color:#0757ad}
   .sidebar,.topbar,.profile-switch,.safety-card,.session-pill,.button,.hero-panel,.floating-note,.stat-card,.panel,.pillar-strip,.impact-card,.forum-card,.sitting-card,.motion-row,.notice-banner,.impact-banner,.hall-topline,.hall-stage,.speaker-screen,.speaker-caption,.hall-quorum,.queue-table,.vote-choice,.hansard-document,.modal,.toast{-webkit-backdrop-filter:none;backdrop-filter:none;background-color:rgba(255,255,255,.9)}
   .sidebar,.hall-topline,.hall-stage,.impact-card,.toast{background-color:rgba(0,31,136,.94)}
 }
+
+.api-error,.api-info,.api-success{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;margin:10px 0;border-radius:6px;font-size:10px;line-height:1.5}
+.api-error{color:#8c2f36;background:rgba(174,54,64,.09);border:1px solid rgba(174,54,64,.22)}
+.api-info{color:#38547f;background:rgba(0,55,170,.055);border:1px solid rgba(0,55,170,.12)}
+.api-success{color:#176b4a;background:rgba(34,139,94,.09);border:1px solid rgba(34,139,94,.22)}
+.button:disabled{opacity:.55;cursor:not-allowed;transform:none}
+.register-link:disabled{opacity:.5;cursor:not-allowed}
