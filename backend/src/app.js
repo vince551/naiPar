@@ -42,10 +42,20 @@ import {
 import {
   clearSessionCookie,
   createSessionResolver,
+  issueCsrfToken,
   requireCsrf,
   requireSession,
   serializeSessionCookie
 } from './security/session.js';
+
+function requireJsonContentType(req, res, next) {
+  if (!req.is('application/json')) {
+    return res.status(415).json({
+      error: { code: 'JSON_REQUIRED', message: 'Send this request as application/json.' }
+    });
+  }
+  return next();
+}
 
 export function createApp({
   pool,
@@ -500,6 +510,45 @@ export function createApp({
       next(error);
     }
   });
+
+  const csrfBootstrapLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 20,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: {
+      error: {
+        code: 'CSRF_REFRESH_RATE_LIMITED',
+        message: 'Please wait before refreshing session security.'
+      }
+    }
+  });
+
+  // A CSRF token is intentionally re-issued through a JSON POST so a
+  // browser form cannot trigger this bootstrap cross-site. The raw token is
+  // returned once; only its SHA-256 digest is persisted.
+  app.post(
+    '/api/v1/auth/csrf',
+    csrfBootstrapLimiter,
+    requireJsonContentType,
+    requireSession,
+    requireAuthenticated,
+    async (req, res, next) => {
+      try {
+        const csrfToken = await issueCsrfToken(pool, req.sessionId);
+        if (!csrfToken) {
+          res.setHeader('Set-Cookie', clearSessionCookie({ secure: secureCookies }));
+          return res.status(401).json({
+            error: { code: 'SESSION_REQUIRED', message: 'Please sign in to continue.' }
+          });
+        }
+        res.setHeader('Cache-Control', 'no-store');
+        res.status(200).json({ data: { csrfToken } });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
 
   app.get('/api/v1/auth/session', requireAuthenticated, (req, res) => {
     res.status(200).json({
