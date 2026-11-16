@@ -64,7 +64,7 @@ function App() {
         setCsrfToken(security.csrfToken);
         setAccountRole(session.role);
         setRole(label);
-        setName(label);
+        setName('Member');
         setSignedIn(true);
         setApiUnavailable(false);
       } catch (error) {
@@ -85,7 +85,7 @@ function App() {
       setCsrfToken(result.csrfToken);
       setAccountRole(result.role);
       setRole(label);
-      setName(label);
+      setName('Member');
       setSignedIn(true);
       setApiUnavailable(false);
       setShowLogin(false);
