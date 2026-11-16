@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 export const SESSION_COOKIE_NAME = 'sauti_yetu_session';
 export const SESSION_TTL_SECONDS = 8 * 60 * 60;
@@ -49,6 +49,31 @@ export function clearSessionCookie({ secure = false } = {}) {
     'Expires=Thu, 01 Jan 1970 00:00:00 GMT',
     ...(secure ? ['Secure'] : [])
   ].join('; ');
+}
+
+export async function issueCsrfToken(pool, sessionId) {
+  if (!pool || typeof sessionId !== 'string' || !sessionId) {
+    throw new TypeError('A database pool and session ID are required');
+  }
+
+  const token = randomBytes(32).toString('base64url');
+  const tokenHash = hashToken(token);
+  const result = await pool.query(
+    `UPDATE auth_sessions s
+     SET csrf_token_hash = $1,
+         last_seen_at = now()
+     FROM users u
+     WHERE s.id = $2
+       AND s.user_id = u.id
+       AND s.revoked_at IS NULL
+       AND s.expires_at > now()
+       AND u.status = 'active'
+     RETURNING s.id`,
+    [tokenHash, sessionId]
+  );
+
+  if (result.rowCount !== 1) return null;
+  return token;
 }
 
 export function createSessionResolver({ pool, secureCookies = false }) {
