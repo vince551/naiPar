@@ -38,3 +38,10 @@ MCCeAS means **Mombasa County Children E-Assembly**. “Sauti Yetu” is the pla
 ## Backend development status
 
 The API is an early development foundation, not a production Assembly service. See [backend/README.md](backend/README.md) for local setup, migration instructions, the implemented pending-registration flow, tests and security limitations. Do not enter real children's information until independent guardian verification, session authentication, safeguarding workflows and production security review are complete.
+
+
+## Connect the browser to the API
+
+The React login, child registration/guardian OTP flow and private concern form use the same-origin `/api/v1` routes. For local development, start the backend in `backend/` with its required development environment variables, then run Vite from the repository root. Vite proxies `/api` to `http://127.0.0.1:4000` by default; override the target with `SAUTI_YETU_API_TARGET` if needed. In production, configure the hosting reverse proxy to forward `/api/*` to the API over a private network. Keep the browser and API same-origin; this API deliberately does not enable permissive cross-origin CORS. The frontend never stores the session token or CSRF token in localStorage; the session cookie is HttpOnly and the CSRF token remains in memory.
+
+The child registration form now creates a pending registration and can request guardian phone OTP. A successful OTP confirms phone possession only; an authorised coordinator must still review guardian consent before activation. The community contribution form submits a private concern and requires an active child/delegate session with approved consent. The Assembly Hall, motion/vote screens, sample member register and Hansard remain illustrative until their APIs are implemented.
