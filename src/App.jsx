@@ -259,5 +259,177 @@ function Records(){return <><div className="hansard-document"><div className="ha
 function Forums({forums,onOpen}){return <><div className="notice-banner"><MessageCircle size={19}/><div><b>Open participation is not delegate voting</b><span>Any child may contribute to public discussions. Contributions do not grant parliamentary status or voting rights.</span></div></div><div className="forum-grid">{forums.map((f,i)=><article className="forum-card" key={f.title}><div className={`forum-card-icon ${f.color}`}>{i===0?<BookOpen size={21}/>:i===1?<HeartHandshake size={21}/>:<Activity size={21}/>}</div><span className="eyebrow">{f.category}</span><h3>{f.title}</h3><p>{f.text}</p><div className="forum-card-foot"><span><MessageCircle size={14}/>{f.replies} contributions</span><button onClick={()=>onOpen('proposal')}>Contribute <ArrowRight size={14}/></button></div></article>)}</div><p className="footnote">This demonstration does not publish content to a server. Real public forums need moderation, privacy controls and safeguarding escalation.</p></>}
 function Proposals({forums,onOpen}){return <><div className="toolbar"><p className="muted">Ideas shared by children for discussion and possible referral.</p><button className="button button-primary" onClick={()=>onOpen('proposal')}><Plus size={16}/> New proposal</button></div><section className="panel">{forums.map((f,i)=><div className="record-row" key={f.title}><div className="proposal-number">{String(i+1).padStart(2,'0')}</div><div><b>{f.title}</b><small>{f.category} · {f.replies} contributions</small><p className="muted small">{f.text}</p></div><span className="pill">Received</span></div>)}</section><p className="footnote">A proposal is not automatically an Assembly motion or a government commitment.</p></>}
 function Stakeholder(){return <><div className="impact-banner"><Handshake size={24}/><div><h2>From children’s priorities to shared action</h2><p>Track referrals, responses and commitments transparently — without promising outcomes outside the Assembly’s control.</p></div></div><section className="panel"><SectionHeader title="Illustrative action tracker"/><div className="action-track">{[['01','Children raise an issue','Contribution received','done'],['02','Assembly or committee reviews','Review and prioritisation','done'],['03','Referral to relevant stakeholder','Referral pending','current'],['04','Response and follow-up','Awaiting response','']].map(a=><div className="action-step" key={a[0]}><span className={`step-number ${a[3]}`}>{a[0]}</span><div><b>{a[1]}</b><small>{a[2]}</small></div><span className={`step-state ${a[3]}`}>{a[3]==='done'?'Completed':a[3]==='current'?'In progress':'Upcoming'}</span></div>)}</div></section><p className="footnote">This is a workflow illustration. No stakeholder has been contacted and no real-world action status is being represented.</p></>}
-function Modal({type,onClose,onSubmit,proposal,setProposal,proposalTitle,setProposalTitle,notify}){const isProposal=type==='proposal';return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal" onMouseDown={e=>e.stopPropagation()}><button className="modal-x" onClick={onClose}><X size={18}/></button>{isProposal?<><div className="modal-symbol"><MessageCircle size={22}/></div><div className="eyebrow">CHILDREN’S PARTICIPATION</div><h2>Share your voice</h2><p className="muted">Share an idea or concern respectfully. Please do not include private details about yourself or another child.</p><form onSubmit={onSubmit}><label>Give your idea a title</label><input value={proposalTitle} onChange={e=>setProposalTitle(e.target.value)} placeholder="What would you like to talk about?" required/><label>Your contribution</label><textarea value={proposal} onChange={e=>setProposal(e.target.value)} placeholder="Describe the issue or idea..." rows="5" required/><div className="form-note"><ShieldCheck size={15}/> Demo only: this contribution stays in this browser session and is not sent anywhere.</div><button className="button button-primary full" type="submit"><Send size={16}/> Add contribution</button></form></>:type==='register'?<><div className="modal-symbol"><Users size={22}/></div><div className="eyebrow">PUBLIC CHILD REGISTRATION · PREVIEW</div><h2>Create your Sauti Yetu profile</h2><p className="muted">A parent or guardian must provide consent before activation. Use sample details only in this prototype.</p><form onSubmit={e=>{e.preventDefault();notify('Registration preview complete. No personal data was saved.');onClose();}}><label>Child’s full name</label><input placeholder="Full name" required/><div className="register-grid"><div><label>Age</label><input type="number" min="5" max="17" placeholder="Age" required/></div><div><label>Gender (optional)</label><select><option>Prefer not to say</option><option>Female</option><option>Male</option><option>Other</option></select></div></div><label>School</label><input placeholder="School name" required/><div className="register-grid"><div><label>County</label><input placeholder="County" required/></div><div><label>Ward</label><input placeholder="Ward" required/></div></div><label>Guardian’s name</label><input placeholder="Guardian full name" required/><label>Guardian phone number</label><input type="tel" placeholder="07xx xxx xxx" required/><label>Three-word passphrase</label><input placeholder="e.g. lion mango river" required/><label className="consent-check"><input type="checkbox" required/> Guardian consent has been reviewed and granted.</label><button className="button button-primary full" type="submit">Preview registration <ArrowRight size={16}/></button></form><p className="footnote">Production requirements: verify consent, hash credentials, minimise child data and enforce safeguarding controls.</p></>:type==='agenda'?<><div className="modal-symbol"><CalendarDays size={22}/></div><div className="eyebrow">PROPOSED PROGRAMME</div><h2>Plenary Sitting No. 04</h2><p className="muted">Thursday, 12 November 2026 · 9:00 AM – 1:00 PM</p><Agenda/><p className="footnote">Illustrative agenda only. Confirm approved procedure and sitting details with the Assembly Secretariat.</p><button className="button button-primary full" onClick={onClose}>Close</button></>:<><div className="modal-symbol"><ShieldCheck size={22}/></div><div className="eyebrow">CHILD SAFEGUARDING</div><h2>Safety comes first</h2><ul className="safety-list"><li>Do not post phone numbers, home addresses, passwords or private documents.</li><li>Be respectful. Do not bully, threaten or identify another child without consent.</li><li>Do not share abuse disclosures in public forums. Use a restricted, trained safeguarding channel.</li><li>If someone is in immediate danger, contact a trusted adult or appropriate child-protection service.</li></ul><button className="button button-primary full" onClick={onClose}>I understand</button></>}</div></div>}
+function RegistrationForm({ onClose, notify }) {
+  const [details, setDetails] = useState({
+    fullName: '', age: '', school: '', county: '', ward: '',
+    guardianName: '', guardianPhone: '', passphrase: ''
+  });
+  const [registrationRequestId, setRegistrationRequestId] = useState('');
+  const [stage, setStage] = useState('form');
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const update = (field) => (event) => {
+    setDetails(current => ({ ...current, [field]: event.target.value }));
+  };
+
+  const submitRegistration = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const result = await api.registerChild({
+        ...details,
+        age: Number(details.age)
+      });
+      setRegistrationRequestId(result.registrationRequestId);
+      setStage('registered');
+    } catch (requestError) {
+      setError(requestError.message || 'Registration could not be submitted.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const requestCode = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await api.requestGuardianOtp({
+        registrationRequestId,
+        guardianPhone: details.guardianPhone
+      });
+      setStage('otp');
+    } catch (requestError) {
+      setError(requestError.message || 'Guardian verification could not be started.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verifyCode = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await api.verifyGuardianOtp({
+        registrationRequestId,
+        guardianPhone: details.guardianPhone,
+        code
+      });
+      setCode('');
+      setStage('verified');
+      notify('Guardian phone possession verified. Coordinator consent review is still required.');
+    } catch (requestError) {
+      setError(requestError.message || 'The verification code could not be verified.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const maskedPhone = details.guardianPhone.replace(/\s+/gu, '').slice(-4);
+
+  return <>
+    <div className="modal-symbol"><Users size={22}/></div>
+    <div className="eyebrow">CHILD REGISTRATION · SECURE API</div>
+    <h2>Create a Sauti Yetu profile</h2>
+    {stage === 'form' && <>
+      <p className="muted">The profile remains inactive until guardian phone verification and an authorised coordinator's consent review are complete.</p>
+      <form onSubmit={submitRegistration}>
+        <label>Child’s full name</label>
+        <input value={details.fullName} onChange={update('fullName')} autoComplete="name" maxLength={120} required/>
+        <div className="register-grid">
+          <div><label>Age</label><input type="number" min="5" max="17" value={details.age} onChange={update('age')} required/></div>
+          <div><label>Ward</label><input value={details.ward} onChange={update('ward')} maxLength={100} required/></div>
+        </div>
+        <label>School</label>
+        <input value={details.school} onChange={update('school')} maxLength={180} required/>
+        <label>County</label>
+        <input value={details.county} onChange={update('county')} maxLength={100} required/>
+        <label>Guardian’s name</label>
+        <input value={details.guardianName} onChange={update('guardianName')} maxLength={120} required/>
+        <label>Guardian phone number</label>
+        <input type="tel" inputMode="tel" autoComplete="tel" value={details.guardianPhone} onChange={update('guardianPhone')} placeholder="07xx xxx xxx" required/>
+        <label>Three-word passphrase</label>
+        <input type="password" autoComplete="new-password" value={details.passphrase} onChange={update('passphrase')} minLength={12} maxLength={120} placeholder="Choose three or more words" required/>
+        <label className="consent-check"><input type="checkbox" required/> I understand this account stays inactive until guardian verification and coordinator consent review are complete.</label>
+        {error && <div className="api-error" role="alert">{error}</div>}
+        <button className="button button-primary full" type="submit" disabled={busy}>{busy?'Submitting…':'Submit registration request'} <ArrowRight size={16}/></button>
+      </form>
+      <p className="footnote">Only necessary registration fields are collected. Do not submit safeguarding disclosures here.</p>
+    </>}
+    {stage === 'registered' && <>
+      <div className="api-success"><Check size={17}/> Registration request received.</div>
+      <p className="muted">The account is pending and cannot sign in yet. Request a verification code for the registered guardian phone ending in {maskedPhone || '••••'}.</p>
+      {error && <div className="api-error" role="alert">{error}</div>}
+      <button className="button button-primary full" onClick={requestCode} disabled={busy}>{busy?'Requesting…':'Request guardian verification code'}</button>
+      <p className="footnote">If SMS delivery is not configured, contact the Assembly Secretariat. Phone verification does not itself grant consent.</p>
+    </>}
+    {stage === 'otp' && <>
+      <p className="muted">Enter the six-digit code sent to the registered guardian phone ending in {maskedPhone || '••••'}.</p>
+      <form onSubmit={verifyCode}>
+        <label>Verification code</label>
+        <input value={code} onChange={event=>setCode(event.target.value.replace(/\D/gu,'').slice(0,6))} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required/>
+        {error && <div className="api-error" role="alert">{error}</div>}
+        <button className="button button-primary full" type="submit" disabled={busy || code.length !== 6}>{busy?'Verifying…':'Verify guardian phone'}</button>
+      </form>
+      <button className="register-link" type="button" onClick={requestCode} disabled={busy}>Request another code</button>
+      <p className="footnote">The code proves phone possession only. An authorised coordinator must still review guardian consent.</p>
+    </>}
+    {stage === 'verified' && <>
+      <div className="api-success"><Check size={17}/> Guardian phone possession verified.</div>
+      <p className="muted">Your registration remains pending. The Assembly Secretariat must complete the separate guardian-consent review before the account can be activated.</p>
+      <button className="button button-primary full" onClick={onClose}>Close</button>
+    </>}
+  </>;
+}
+
+function Modal({ type, onClose, onSubmit, proposal, setProposal, proposalTitle, setProposalTitle, notify, signedIn, accountRole, onRequestLogin }) {
+  const isProposal = type === 'proposal';
+  const canSubmitConcern = signedIn && ['public_child', 'delegate'].includes(accountRole);
+
+  return <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className="modal" onMouseDown={event => event.stopPropagation()}>
+      <button className="modal-x" onClick={onClose}><X size={18}/></button>
+      {isProposal ? <>
+        <div className="modal-symbol"><MessageCircle size={22}/></div>
+        <div className="eyebrow">PRIVATE CHILD PARTICIPATION</div>
+        <h2>Share your voice</h2>
+        <p className="muted">Your submission goes to a restricted review queue. It is not published automatically. Do not include phone numbers, addresses or abuse disclosures.</p>
+        <form onSubmit={onSubmit}>
+          <label>Give your concern a title</label>
+          <input value={proposalTitle} onChange={event=>setProposalTitle(event.target.value)} placeholder="What would you like to raise?" maxLength={160} required/>
+          <label>Your concern</label>
+          <textarea value={proposal} onChange={event=>setProposal(event.target.value)} placeholder="Describe the issue or idea..." rows="5" maxLength={4000} required/>
+          <div className="form-note"><ShieldCheck size={15}/> Private by default. A coordinator must review and separately approve any de-identified public summary.</div>
+          {!signedIn && <div className="api-info">Sign in with an approved child or delegate account to submit a concern.</div>}
+          {signedIn && !canSubmitConcern && <div className="api-info">This account role cannot submit child concerns.</div>}
+          <button className="button button-primary full" type="submit" disabled={!canSubmitConcern}><Send size={16}/> Submit privately</button>
+          {!signedIn && <button className="register-link" type="button" onClick={onRequestLogin}>Sign in to continue</button>}
+        </form>
+      </> : type === 'register' ? <RegistrationForm onClose={onClose} notify={notify}/> :
+      type === 'agenda' ? <>
+        <div className="modal-symbol"><CalendarDays size={22}/></div>
+        <div className="eyebrow">PROPOSED PROGRAMME</div>
+        <h2>Plenary Sitting No. 04</h2>
+        <p className="muted">Thursday, 12 November 2026 · 9:00 AM – 1:00 PM</p>
+        <Agenda/>
+        <p className="footnote">Illustrative agenda only. Confirm approved procedure and sitting details with the Assembly Secretariat.</p>
+        <button className="button button-primary full" onClick={onClose}>Close</button>
+      </> : <>
+        <div className="modal-symbol"><ShieldCheck size={22}/></div>
+        <div className="eyebrow">CHILD SAFEGUARDING</div>
+        <h2>Safety comes first</h2>
+        <ul className="safety-list">
+          <li>Do not post phone numbers, home addresses, passwords or private documents.</li>
+          <li>Be respectful. Do not bully, threaten or identify another child without consent.</li>
+          <li>Do not share abuse disclosures in public forums. Use a restricted, trained safeguarding channel.</li>
+          <li>If someone is in immediate danger, contact a trusted adult or appropriate child-protection service.</li>
+        </ul>
+        <button className="button button-primary full" onClick={onClose}>I understand</button>
+      </>}
+    </div>
+  </div>;
+}
 export default App;
