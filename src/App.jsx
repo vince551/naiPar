@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity, ArrowRight, Bell, BookOpen, CalendarDays, Check, ChevronDown,
   ChevronRight, CircleHelp, ClipboardList, FileText, Flag, Handshake,
@@ -7,6 +7,13 @@ import {
   PanelLeftClose
 } from 'lucide-react';
 import { agenda, motions as initialMotions, forums as initialForums, members } from './data';
+import { api } from './api';
+
+const ROLE_LABELS = {
+  public_child: 'Public child', delegate: 'Verified delegate', speaker: 'Speaker',
+  clerk: 'Assembly clerk', coordinator: 'County coordinator',
+  stakeholder: 'Stakeholder', admin: 'Administrator'
+};
 
 const navGroups = [
   { label: 'WORKSPACE', items: [
@@ -25,9 +32,13 @@ function App() {
   const [loginMode, setLoginMode] = useState('child');
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  const [picturePassphrase, setPicturePassphrase] = useState(false);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [csrfToken, setCsrfToken] = useState('');
+  const [accountRole, setAccountRole] = useState('');
+  const [apiUnavailable, setApiUnavailable] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
-  const [role, setRole] = useState('Assembly Secretariat');
+  const [role, setRole] = useState('Public visitor');
   const [name, setName] = useState('Guest');
   const [modal, setModal] = useState('');
   const [search, setSearch] = useState('');
@@ -42,12 +53,94 @@ function App() {
 
   const notify = (message) => { setNotice(message); window.setTimeout(() => setNotice(''), 3200); };
   const navigate = (page) => { setActive(page); setSidebarOpen(false); setSearch(''); };
-  const submitProposal = (e) => {
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const session = await api.getSession();
+        const security = await api.refreshCsrf();
+        if (!mounted) return;
+        const label = ROLE_LABELS[session.role] || 'Authenticated member';
+        setCsrfToken(security.csrfToken);
+        setAccountRole(session.role);
+        setRole(label);
+        setName(label);
+        setSignedIn(true);
+        setApiUnavailable(false);
+      } catch (error) {
+        if (!mounted) return;
+        if (error.status !== 401 && error.status !== 403) setApiUnavailable(true);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const handleLogin = async (e) => {
     e.preventDefault();
+    setAuthBusy(true);
+    setAuthError('');
+    try {
+      const result = await api.login(loginMode, loginUsername, loginPassword);
+      const label = ROLE_LABELS[result.role] || 'Authenticated member';
+      setCsrfToken(result.csrfToken);
+      setAccountRole(result.role);
+      setRole(label);
+      setName(label);
+      setSignedIn(true);
+      setApiUnavailable(false);
+      setShowLogin(false);
+      setLoginPassword('');
+      setLoginUsername('');
+      notify('Secure sign-in successful.');
+    } catch (error) {
+      setAuthError(error.message || 'Sign-in could not be completed.');
+      if (!error.status || error.status >= 500) setApiUnavailable(true);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await api.logout(csrfToken);
+      setSignedIn(false);
+      setAccountRole('');
+      setCsrfToken('');
+      setRole('Public visitor');
+      setName('Guest');
+      setLoginPassword('');
+      notify('You have signed out.');
+    } catch (error) {
+      notify(error.message || 'Sign-out could not be completed.');
+    }
+  };
+
+  const submitProposal = async (e) => {
+    e.preventDefault();
+    if (!signedIn) {
+      setModal('');
+      setShowLogin(true);
+      notify('Sign in with an approved child or delegate account to submit privately.');
+      return;
+    }
+    if (!['public_child', 'delegate'].includes(accountRole)) {
+      notify('This account is not authorised to submit child concerns.');
+      return;
+    }
     if (!proposalTitle.trim() || !proposal.trim()) return;
-    setForums([{ title: proposalTitle, category: 'Community proposal', replies: 0, color: 'blue', text: proposal }, ...forums]);
-    setProposal(''); setProposalTitle(''); setModal('');
-    notify('Your contribution has been added to this local demo.');
+    try {
+      await api.submitConcern({
+        theme: 'Community participation',
+        title: proposalTitle,
+        description: proposal
+      }, csrfToken);
+      setProposal('');
+      setProposalTitle('');
+      setModal('');
+      notify('Your concern was submitted privately for moderation.');
+    } catch (error) {
+      notify(error.message || 'Your contribution could not be submitted.');
+    }
   };
 
   const pageTitle = active === 'Overview' ? 'Good afternoon' : active;
@@ -81,7 +174,7 @@ function App() {
     <main className="main-area">
       <header className="topbar">
         <div className="top-left"><button className="icon-btn menu-btn" onClick={() => setSidebarOpen(true)} aria-label="Open menu"><Menu size={20}/></button><div className="crumb">MCCeAS <ChevronRight size={14}/><b>{active}</b></div></div>
-        <div className="top-actions"><div className="session-pill"><span/> DEMO MODE</div><button className="icon-btn notification-btn" onClick={() => notify('You are all caught up.')} aria-label="Notifications"><Bell size={19}/><i/></button><button className="user-chip" onClick={() => setShowLogin(true)}><span className="user-avatar">{signedIn ? name.slice(0,1).toUpperCase() : 'G'}</span><span>{signedIn ? name : 'Guest'}</span><ChevronDown size={14}/></button></div>
+        <div className="top-actions"><div className="session-pill"><span/> {signedIn ? 'API CONNECTED' : apiUnavailable ? 'API OFFLINE' : 'PREVIEW MODE'}</div><button className="icon-btn notification-btn" onClick={() => notify('You are all caught up.')} aria-label="Notifications"><Bell size={19}/><i/></button><button className="user-chip" onClick={signedIn ? handleLogout : () => { setAuthError(''); setShowLogin(true); }} title={signedIn ? 'Sign out' : 'Sign in'}><span className="user-avatar">{signedIn ? name.slice(0,1).toUpperCase() : 'G'}</span><span>{signedIn ? 'Sign out' : 'Guest'}</span>{signedIn ? <LogOut size={14}/> : <ChevronDown size={14}/>}</button></div>
       </header>
       <div className="page-content">
         <section className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line"/>{active === 'Overview' ? 'THURSDAY, 05 NOVEMBER 2026' : 'MOMBASA COUNTY CHILDREN E-ASSEMBLY'}</div><h1>{pageTitle}{active === 'Overview' && <span className="heading-name">, {signedIn ? name.split(' ')[0] : 'delegate'}</span>}</h1><p>{pageDescription}</p></div><div className="heading-buttons"><button className="button button-light" onClick={() => setModal('agenda')}><CalendarDays size={16}/> View calendar</button><button className="button button-primary" onClick={() => setModal('proposal')}><Plus size={17}/> Submit a voice</button></div></section>
@@ -100,9 +193,9 @@ function App() {
       </div>
     </main>
 
-    {showLogin && <div className="modal-backdrop" onMouseDown={() => setShowLogin(false)}><div className="modal login-modal" onMouseDown={e => e.stopPropagation()}><button className="modal-x" onClick={() => setShowLogin(false)}><X size={18}/></button><div className="modal-symbol"><Landmark size={23}/></div><div className="eyebrow">MCCeAS SECURE ACCESS · UI PREVIEW</div><h2>Welcome to Sauti Yetu</h2><p className="muted">One access point for children, delegates and authorised adults.</p><div className="login-tabs"><button className={loginMode==='child'?'selected':''} onClick={()=>setLoginMode('child')}>Child / Delegate</button><button className={loginMode==='adult'?'selected':''} onClick={()=>setLoginMode('adult')}>Official / Stakeholder</button></div><form onSubmit={e => {e.preventDefault();setName(name==='Guest'?'Demo user':name);setSignedIn(true);setShowLogin(false);notify('Demo session started. No credentials were verified.')}}><label>{loginMode==='child'?'Guardian phone number':'Official work email'}</label><input value={loginUsername} onChange={e=>setLoginUsername(e.target.value)} placeholder={loginMode==='child'?'e.g. 0712 345 678':'name@organisation.go.ke'} autoComplete="username" required/><label>{loginMode==='child'?'Three-word passphrase':'Password'}</label><input type="password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder={loginMode==='child'?'e.g. lion mango river':'Enter your password'} autoComplete="current-password" required/><div className="login-extra">{loginMode==='child'?<><button type="button" onClick={()=>setPicturePassphrase(!picturePassphrase)}>{picturePassphrase?'Use words instead':'Use picture passphrase'}</button><span>Forgot passphrase? Ask your registered guardian to reset it.</span></>:<span>Official accounts require administrator approval.</span>}</div>{picturePassphrase&&loginMode==='child'&&<div className="picture-passphrase"><button type="button" onClick={()=>notify('Picture passphrase is a visual prototype.')}>Lion</button><button type="button" onClick={()=>notify('Picture passphrase is a visual prototype.')}>Mango</button><button type="button" onClick={()=>notify('Picture passphrase is a visual prototype.')}>River</button></div>}<button className="button button-primary full" type="submit">Continue securely <ArrowRight size={16}/></button></form><div className="demo-warning"><ShieldCheck size={16}/> Prototype only. Sign-in is simulated; no account, password or guardian phone is verified or stored.</div><button className="register-link" onClick={()=>{setShowLogin(false);setModal('register')}}>New to Sauti Yetu? <b>Explore child registration</b></button></div></div>}
+    {showLogin && <div className="modal-backdrop" onMouseDown={() => !authBusy && setShowLogin(false)}><div className="modal login-modal" onMouseDown={e => e.stopPropagation()}><button className="modal-x" onClick={() => !authBusy && setShowLogin(false)}><X size={18}/></button><div className="modal-symbol"><Landmark size={23}/></div><div className="eyebrow">SAUTI YETU SECURE ACCESS</div><h2>Welcome to Sauti Yetu</h2><p className="muted">Sign in using an account that has been approved by the Assembly Secretariat.</p><div className="login-tabs"><button type="button" className={loginMode==='child'?'selected':''} onClick={()=>{setLoginMode('child');setAuthError('');}}>Child / Delegate</button><button type="button" className={loginMode==='adult'?'selected':''} onClick={()=>{setLoginMode('adult');setAuthError('');}}>Official / Stakeholder</button></div><form onSubmit={handleLogin}><label>{loginMode==='child'?'Guardian phone number':'Official work email'}</label><input value={loginUsername} onChange={e=>setLoginUsername(e.target.value)} placeholder={loginMode==='child'?'e.g. 0712 345 678':'name@organisation.go.ke'} autoComplete="username" required/><label>{loginMode==='child'?'Three-word passphrase':'Password'}</label><input type="password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} placeholder={loginMode==='child'?'Enter your three-word passphrase':'Enter your password'} autoComplete="current-password" required/><div className="login-extra"><span>{loginMode==='child'?'Child access requires approved guardian consent.':'Adult accounts must be provisioned and activated by an administrator.'}</span></div>{authError && <div className="api-error" role="alert">{authError}</div>}<button className="button button-primary full" type="submit" disabled={authBusy}>{authBusy?'Verifying…':'Continue securely'} <ArrowRight size={16}/></button></form><div className="demo-warning"><ShieldCheck size={16}/> Credentials are sent to the Sauti Yetu API over this site. The session cookie is HttpOnly; account access is checked by the server.</div><button className="register-link" onClick={()=>{setShowLogin(false);setAuthError('');setModal('register')}}>New to Sauti Yetu? <b>Register a child profile</b></button></div></div>}
 
-    {modal && <Modal type={modal} onClose={() => setModal('')} onSubmit={submitProposal} proposal={proposal} setProposal={setProposal} proposalTitle={proposalTitle} setProposalTitle={setProposalTitle} notify={notify}/>}
+    {modal && <Modal type={modal} onClose={() => setModal('')} onSubmit={submitProposal} proposal={proposal} setProposal={setProposal} proposalTitle={proposalTitle} setProposalTitle={setProposalTitle} notify={notify} signedIn={signedIn} accountRole={accountRole} onRequestLogin={() => { setModal(''); setShowLogin(true); }}/ >}
     {selectedMotion && <div className="modal-backdrop" onMouseDown={() => setSelectedMotion(null)}><div className="modal" onMouseDown={e => e.stopPropagation()}><button className="modal-x" onClick={() => setSelectedMotion(null)}><X size={18}/></button><div className="eyebrow">MOTION DETAILS · {selectedMotion.id}</div><h2>{selectedMotion.title}</h2><p className="muted">{selectedMotion.committee} · Submitted {selectedMotion.date}</p><div className="detail-stat"><span>Current status</span><b>{selectedMotion.status}</b></div><div className="detail-stat"><span>Recorded support (demo)</span><b>{selectedMotion.support} delegates</b></div><p className="muted small">Voting and delegate verification are not connected in this demonstration. No binding vote can be cast here.</p><button className="button button-primary full" onClick={() => setSelectedMotion(null)}>Close details</button></div></div>}
     {notice && <div className="toast"><Check size={17}/>{notice}</div>}
   </div>;
