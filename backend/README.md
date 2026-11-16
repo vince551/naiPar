@@ -188,7 +188,7 @@ A credential match is not enough: the account must be active, and child/delegate
 - A session is revoked when its account is no longer active. If guardian consent is withdrawn, child/delegate authorisation is denied on subsequent protected requests.
 - All future cookie-authenticated state-changing routes must use `requireSession`, `requireCsrf`, `requireAuthenticated` and the appropriate role/resource checks.
 
-The current frontend has not yet been connected to these endpoints. It still displays a demo sign-in and must not be used to collect real credentials.
+The React login form now calls these endpoints through the same-origin browser API client. After a page reload, it restores the server session and obtains a fresh CSRF token through `POST /api/v1/auth/csrf`. The frontend keeps the raw CSRF token in memory only. No production or persistent staging API is deployed; do not use real credentials until an approved staging environment is available.
 
 ## Role and privacy boundaries
 
@@ -260,7 +260,7 @@ Generate `GUARDIAN_OTP_PEPPER` independently from the guardian phone lookup and 
 
 A successful OTP is only evidence that someone can receive messages at the phone number supplied at child registration. It does not establish that the phone holder is the child's legal guardian, nor does it prove informed consent. An authorised coordinator must still complete the separate review and record an approved verification method. When `guardian_otp` is selected for that review, the database requires the successful OTP challenge to be linked to the consent record. Existing in-person and document-review methods remain available under the documented safeguarding procedure.
 
-The OTP endpoints are not yet connected to the React registration screen. The SMS relay is not configured in this repository, so the checked-in server will not send messages until the operator supplies a real, approved relay endpoint and secret. Do not use real child records before provider verification, coordinator training, privacy review and deployment hardening.
+The OTP endpoints are now called by the React registration flow. The SMS relay is not configured in this repository, so the checked-in server will not send messages until the operator supplies a real, approved relay endpoint and secret. Do not use real child records before provider verification, coordinator training, privacy review and deployment hardening.
 
 ### Operational rate-limit note
 
@@ -325,3 +325,10 @@ This workflow is not yet connected to a coordinator React dashboard. The public 
 ### CSRF token refresh for browser clients
 
 After a browser reload, the HttpOnly session cookie remains available but the raw CSRF token is intentionally not recoverable from its stored hash. The client first calls `GET /api/v1/auth/session`, then sends `POST /api/v1/auth/csrf` with an `application/json` body of `{}`. This endpoint requires a live authenticated session, rotates the stored CSRF digest, and returns the new raw token once. It is rate-limited and rejects form-encoded requests; the API does not enable cross-origin CORS. Keep the returned token in application memory only. All cookie-authenticated mutations continue to require `x-csrf-token`.
+
+
+## Browser integration status
+
+The React application uses `src/api.js` for same-origin requests. The login modal calls the real login endpoint, restores an existing session on page load, refreshes the CSRF token through the JSON-only bootstrap route, and revokes the session on sign-out. Child registration creates a pending request and offers guardian OTP request/verification. The Share Your Voice form submits to the private concern endpoint only for an authenticated child/delegate account. The browser never stores the HttpOnly session token or the CSRF token in localStorage.
+
+The Vite development server proxies `/api` to `SAUTI_YETU_API_TARGET` (default `http://127.0.0.1:4000`). Production must use a same-origin reverse proxy. The API has no permissive CORS configuration. Assembly Hall, motions, debate, voting, member register, Hansard and stakeholder pages remain demonstration data; no official parliamentary action is connected. The UI explicitly warns that this integration is development-only. Do not enter real children's data or credentials until a secured staging environment, approved SMS provider, trained coordinator workflow, safeguarding review and privacy approval exist.
