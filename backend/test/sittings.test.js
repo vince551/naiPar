@@ -104,6 +104,17 @@ test('updates drafts only and records changed field names, not content', async (
   assert.doesNotMatch(JSON.stringify(audit.params), /Revised plenary sitting/u);
 });
 
+test('treats an identical draft update as a no-op without writing history', async () => {
+  const pool = fakePool(), service = createSittingService({ pool });
+  const row = await service.updateSitting(id, {
+    title: 'Children’s Assembly plenary sitting'
+  }, context(clerk));
+  assert.equal(row.status, 'draft');
+  assert.equal(pool.events.length, 0);
+  assert.ok(!pool.calls.some(call => call.sql.includes('UPDATE sittings')));
+  assert.ok(!pool.calls.some(call => call.sql.includes('INSERT INTO audit_logs')));
+});
+
 test('rejects editing published sittings and enforces terminal lifecycle states', async () => {
   const pool = fakePool(), service = createSittingService({ pool });
   await service.transitionSitting(id, { status: 'published' }, context(clerk));
