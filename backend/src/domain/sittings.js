@@ -236,14 +236,29 @@ export function createSittingService({ pool }) {
         Object.hasOwn(input, 'scheduledAt') ? input.scheduledAt : current.scheduled_at,
         Object.hasOwn(input, 'venue') ? input.venue : current.venue
       ];
+      const currentValues = {
+        title: current.title,
+        sessionNumber: current.session_number,
+        scheduledAt: new Date(current.scheduled_at).getTime(),
+        venue: current.venue
+      };
+      const changedFields = Object.keys(input).filter(field => {
+        const nextValue = field === 'scheduledAt'
+          ? new Date(input.scheduledAt).getTime()
+          : input[field];
+        return currentValues[field] !== nextValue;
+      });
+      if (!changedFields.length) {
+        return mapSitting({ ...current, published_at: null, concluded_at: null });
+      }
       const result = await client.query(
         'UPDATE sittings SET title = $2, session_number = $3, scheduled_at = $4, venue = $5, updated_at = now() WHERE id = $1 ' +
         'RETURNING id, title, session_number, scheduled_at, venue, status::text AS status, published_at, concluded_at',
         values
       );
       const row = result.rows?.[0];
-      await event(client, context.actorUserId, id, 'updated', 'draft', 'draft', context, { changedFields: Object.keys(input) });
-      await audit(client, context.actorUserId, 'sitting.updated', id, context, { changedFields: Object.keys(input) });
+      await event(client, context.actorUserId, id, 'updated', 'draft', 'draft', context, { changedFields });
+      await audit(client, context.actorUserId, 'sitting.updated', id, context, { changedFields });
       return mapSitting(row);
     });
   }
