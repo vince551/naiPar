@@ -332,3 +332,18 @@ After a browser reload, the HttpOnly session cookie remains available but the ra
 The React application uses `src/api.js` for same-origin requests. The login modal calls the real login endpoint, restores an existing session on page load, refreshes the CSRF token through the JSON-only bootstrap route, and revokes the session on sign-out. Child registration creates a pending request and offers guardian OTP request/verification. The Share Your Voice form submits to the private concern endpoint only for an authenticated child/delegate account. The browser never stores the HttpOnly session token or the CSRF token in localStorage.
 
 The Vite development server proxies `/api` to `SAUTI_YETU_API_TARGET` (default `http://127.0.0.1:4000`). Production must use a same-origin reverse proxy. The API has no permissive CORS configuration. Assembly Hall, motions, debate, voting, member register, Hansard and stakeholder pages remain demonstration data; no official parliamentary action is connected. The UI explicitly warns that this integration is development-only. Do not enter real children's data or credentials until a secured staging environment, approved SMS provider, trained coordinator workflow, safeguarding review and privacy approval exist.
+
+
+## Official sitting lifecycle (migration 0013)
+
+- \`GET /api/v1/public/sittings?limit=20\` — published, in-progress and concluded sitting metadata from the narrow public database view.
+- \`GET /api/v1/assembly/sittings\` and \`GET /api/v1/assembly/sittings/:sittingId\` — authenticated Assembly readers. Clerks and administrators can see drafts; delegates, speakers and coordinators see published proceedings only. Stakeholders and public-child accounts use the public projection.
+- \`POST /api/v1/assembly/sittings\` — active clerk or administrator creates a draft. Body: \`{ "title": "Children’s Assembly plenary sitting", "sessionNumber": 4, "scheduledAt": "2027-02-15T09:00:00+03:00", "venue": "Mombasa County Assembly Hall" }\`.
+- \`PATCH /api/v1/assembly/sittings/:sittingId\` — edits draft title, session number, schedule or venue only.
+- \`POST /api/v1/assembly/sittings/:sittingId/transitions\` — requests \`published\`, \`in_progress\`, \`concluded\` or \`cancelled\`.
+
+Allowed transitions: draft → published → in progress → concluded; cancellation is allowed only from draft or published. Concluded and cancelled records are terminal. Publishing and concluding set server timestamps. Published sitting details are immutable.
+
+Mutations require an active server-authenticated clerk/admin session, CSRF token and JSON content type. PostgreSQL validates the actor context, lifecycle transitions, immutable creator, append-only lifecycle events and matching audit records using a deferred constraint trigger. Draft reads are audited. The public view excludes creator IDs and private order-paper storage keys.
+
+Migration 0013 backfills existing sitting rows with baseline events and normalises lifecycle timestamps. It does not deploy or alter a production database automatically. This slice is not yet connected to the Assembly Hall React pages; attendance, order-paper document storage, motions, debates and voting remain future work.
