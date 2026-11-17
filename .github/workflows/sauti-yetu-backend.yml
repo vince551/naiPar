@@ -92,6 +92,8 @@ jobs:
                 to_regclass('public.stakeholder_updates') AS stakeholder_updates_table,
                 to_regclass('public.concern_moderation_events') AS concern_moderation_events_table,
                 to_regclass('public.public_concern_summary') AS public_view,
+                to_regclass('public.sitting_lifecycle_events') AS sitting_lifecycle_events_table,
+                to_regclass('public.public_sitting_summary') AS public_sitting_view,
                 to_regclass('public.stakeholder_resolution_summary') AS stakeholder_view,
                 to_regclass('public.concerns_submitter_created_idx') AS concerns_owner_index,
                 (SELECT count(*) FROM pg_constraint WHERE conname = 'concerns_private_content_encrypted_check') AS encrypted_concern_constraint,
@@ -109,11 +111,13 @@ jobs:
               !row.stakeholder_updates_table ||
               !row.concern_moderation_events_table ||
               !row.public_view ||
+              !row.sitting_lifecycle_events_table ||
+              !row.public_sitting_view ||
               !row.stakeholder_view ||
               !row.concerns_owner_index ||
               Number(row.encrypted_concern_constraint) !== 1 ||
               Number(row.redacted_public_projection_constraint) !== 1 ||
-              Number(row.migration_count) !== 12
+              Number(row.migration_count) !== 13
             ) {
               throw new Error('One or more expected schema objects are missing');
             }
@@ -438,6 +442,8 @@ jobs:
         run: node scripts/verify-concern-privacy-postgres.js
       - name: Verify coordinator concern moderation and public projection integrity
         run: node scripts/verify-concern-moderation-postgres.js
+      - name: Verify official sitting lifecycle and public projection integrity
+        run: node scripts/verify-sittings-postgres.js
       - name: Smoke-test API health endpoints
         run: |
           node src/server.js > /tmp/sauti-yetu-api.log 2>&1 &
