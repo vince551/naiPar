@@ -40,6 +40,13 @@ import {
   ConcernModerationValidationError
 } from './domain/concern-moderation.js';
 import {
+  createSittingService,
+  SittingConflictError,
+  SittingForbiddenError,
+  SittingNotFoundError,
+  SittingValidationError
+} from './domain/sittings.js';
+import {
   clearSessionCookie,
   createSessionResolver,
   issueCsrfToken,
@@ -89,6 +96,7 @@ export function createApp({
   const consentReview = createGuardianConsentReviewService({ pool, fieldCrypto });
   const concerns = createConcernService({ pool, fieldCrypto });
   const concernModeration = createConcernModerationService({ pool, fieldCrypto });
+  const sittings = createSittingService({ pool });
   const guardianPhoneVerification = createGuardianPhoneVerificationService({
     pool,
     fieldCrypto,
@@ -511,6 +519,72 @@ export function createApp({
     }
   });
 
+  // Public readers receive only published metadata from the narrow database view.
+  app.get('/api/v1/public/sittings', async (req, res, next) => {
+    try {
+      const data = await sittings.listPublicSittings({ limit: req.query.limit });
+      res.status(200).json({ data });
+    } catch (error) { next(error); }
+  });
+
+  const sittingReadAccess = [
+    requireSession, requireAuthenticated,
+    requireRoles('delegate', 'speaker', 'clerk', 'coordinator', 'admin')
+  ];
+  const sittingWriteAccess = [
+    requireSession, requireAuthenticated, requireRoles('clerk', 'admin')
+  ];
+
+  app.get('/api/v1/assembly/sittings', ...sittingReadAccess, async (req, res, next) => {
+    try {
+      const data = await sittings.listAssemblySittings({
+        actorUserId: req.auth.userId, limit: req.query.limit, requestId: req.requestId,
+        networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+      });
+      res.status(200).json({ data });
+    } catch (error) { next(error); }
+  });
+
+  app.get('/api/v1/assembly/sittings/:sittingId', ...sittingReadAccess, async (req, res, next) => {
+    try {
+      const data = await sittings.getAssemblySitting(req.params.sittingId, {
+        actorUserId: req.auth.userId, requestId: req.requestId,
+        networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+      });
+      res.status(200).json({ data });
+    } catch (error) { next(error); }
+  });
+
+  app.post('/api/v1/assembly/sittings', ...sittingWriteAccess, requireCsrf, requireJsonContentType, async (req, res, next) => {
+    try {
+      const data = await sittings.createSitting(req.body, {
+        actorUserId: req.auth.userId, requestId: req.requestId,
+        networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+      });
+      res.status(201).json({ data, message: 'Sitting draft created.' });
+    } catch (error) { next(error); }
+  });
+
+  app.patch('/api/v1/assembly/sittings/:sittingId', ...sittingWriteAccess, requireCsrf, requireJsonContentType, async (req, res, next) => {
+    try {
+      const data = await sittings.updateSitting(req.params.sittingId, req.body, {
+        actorUserId: req.auth.userId, requestId: req.requestId,
+        networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+      });
+      res.status(200).json({ data, message: 'Sitting draft updated.' });
+    } catch (error) { next(error); }
+  });
+
+  app.post('/api/v1/assembly/sittings/:sittingId/transitions', ...sittingWriteAccess, requireCsrf, requireJsonContentType, async (req, res, next) => {
+    try {
+      const data = await sittings.transitionSitting(req.params.sittingId, req.body, {
+        actorUserId: req.auth.userId, requestId: req.requestId,
+        networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+      });
+      res.status(200).json({ data, message: 'Sitting lifecycle updated.' });
+    } catch (error) { next(error); }
+  });
+
   const csrfBootstrapLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 20,
@@ -648,6 +722,27 @@ export function createApp({
           code: 'CONSENT_REVIEW_CONFLICT',
           message: 'This consent request is no longer available for review.'
         }
+      });
+    }
+
+    if (error instanceof SittingValidationError) {
+      return res.status(400).json({
+        error: { code: 'SITTING_VALIDATION_FAILED', message: 'Check the sitting details.', fields: error.fields }
+      });
+    }
+    if (error instanceof SittingForbiddenError) {
+      return res.status(403).json({
+        error: { code: 'SITTING_ACCESS_REQUIRED', message: 'An authorised active Assembly account is required.' }
+      });
+    }
+    if (error instanceof SittingNotFoundError) {
+      return res.status(404).json({
+        error: { code: 'SITTING_NOT_FOUND', message: 'The sitting was not found or is not visible to this account.' }
+      });
+    }
+    if (error instanceof SittingConflictError) {
+      return res.status(409).json({
+        error: { code: 'SITTING_LIFECYCLE_CONFLICT', message: 'The sitting has changed or is not eligible for this action.' }
       });
     }
 
