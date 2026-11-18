@@ -338,11 +338,11 @@ The Vite development server proxies `/api` to `SAUTI_YETU_API_TARGET` (default `
 
 ## Official sitting lifecycle (migration 0013)
 
-- \`GET /api/v1/public/sittings?limit=20\` — published, in-progress and concluded sitting metadata from the narrow public database view.
-- \`GET /api/v1/assembly/sittings\` and \`GET /api/v1/assembly/sittings/:sittingId\` — authenticated Assembly readers. Clerks and administrators can see drafts; delegates, speakers and coordinators see published proceedings only. Stakeholders and public-child accounts use the public projection.
-- \`POST /api/v1/assembly/sittings\` — active clerk or administrator creates a draft. Body: \`{ "title": "Children’s Assembly plenary sitting", "sessionNumber": 4, "scheduledAt": "2027-02-15T09:00:00+03:00", "venue": "Mombasa County Assembly Hall" }\`.
-- \`PATCH /api/v1/assembly/sittings/:sittingId\` — edits draft title, session number, schedule or venue only.
-- \`POST /api/v1/assembly/sittings/:sittingId/transitions\` — requests \`published\`, \`in_progress\`, \`concluded\` or \`cancelled\`.
+- `GET /api/v1/public/sittings?limit=20` — published, in-progress and concluded sitting metadata from the narrow public database view.
+- `GET /api/v1/assembly/sittings` and `GET /api/v1/assembly/sittings/:sittingId` — authenticated Assembly readers. Clerks and administrators can see drafts; delegates, speakers and coordinators see published proceedings only. Stakeholders and public-child accounts use the public projection.
+- `POST /api/v1/assembly/sittings` — active clerk or administrator creates a draft. Body: `{ "title": "Children’s Assembly plenary sitting", "sessionNumber": 4, "scheduledAt": "2027-02-15T09:00:00+03:00", "venue": "Mombasa County Assembly Hall" }`.
+- `PATCH /api/v1/assembly/sittings/:sittingId` — edits draft title, session number, schedule or venue only.
+- `POST /api/v1/assembly/sittings/:sittingId/transitions` — requests `published`, `in_progress`, `concluded` or `cancelled`.
 
 Allowed transitions: draft → published → in progress → concluded; cancellation is allowed only from draft or published. Concluded and cancelled records are terminal. Publishing and concluding set server timestamps. Published sitting details are immutable.
 
@@ -352,11 +352,11 @@ Migration 0013 backfills existing sitting rows with baseline events and normalis
 
 ## Delegate motion submission and clerk review (migration 0014)
 
-- \`POST /api/v1/assembly/motions\` — active delegate with approved, unwithdrawn guardian consent submits a motion to a published or in-progress sitting. Body: \`{ "sittingId": "<uuid>", "title": "Improve access to safe school water", "description": "..." }\`.
-- \`GET /api/v1/assembly/motions/mine\` — delegate retrieves only their own submissions.
-- \`GET /api/v1/clerk/motions?limit=20\` and \`GET /api/v1/clerk/motions/:motionId\` — active clerk or administrator reviews the restricted submission queue and original text.
-- \`POST /api/v1/clerk/motions/:motionId/review\` — one-time review. Use \`{ "decision": "schedule_debate", "publicTitle": "...", "publicSummary": "..." }\`, \`{ "decision": "refer_to_committee", "committee": "Health and Wellbeing", "publicTitle": "...", "publicSummary": "..." }\`, or \`{ "decision": "reject", "reasonCode": "duplicate" }\`.
-- \`GET /api/v1/public/motions?limit=20\` — returns only separately reviewed public wording for motions scheduled for debate, referred to committee or adopted.
+- `POST /api/v1/assembly/motions` — active delegate with approved, unwithdrawn guardian consent submits a motion to a published or in-progress sitting. Body: `{ "sittingId": "<uuid>", "title": "Improve access to safe school water", "description": "..." }`.
+- `GET /api/v1/assembly/motions/mine` — delegate retrieves only their own submissions.
+- `GET /api/v1/clerk/motions?limit=20` and `GET /api/v1/clerk/motions/:motionId` — active clerk or administrator reviews the restricted submission queue and original text.
+- `POST /api/v1/clerk/motions/:motionId/review` — one-time review. Use `{ "decision": "schedule_debate", "publicTitle": "...", "publicSummary": "..." }`, `{ "decision": "refer_to_committee", "committee": "Health and Wellbeing", "publicTitle": "...", "publicSummary": "..." }`, or `{ "decision": "reject", "reasonCode": "duplicate" }`.
+- `GET /api/v1/public/motions?limit=20` — returns only separately reviewed public wording for motions scheduled for debate, referred to committee or adopted.
 
 Motion numbers are database-generated. Original submission text and proposer identity are restricted to the submitting delegate and authorised clerks. Public readers receive only the reviewed title, summary, committee, status and non-identifying timestamps. The application rejects obvious email addresses, Kenyan mobile numbers and URLs in public wording; this is a basic filter, not comprehensive de-identification. Clerks remain responsible for reviewing context and indirect identifiers.
 

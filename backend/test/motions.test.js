@@ -154,7 +154,7 @@ test('clerk can schedule a motion for debate using separately reviewed public wo
   assert.equal(row.status, 'under_debate');
   assert.equal(row.publicTitle, 'Improve safe drinking water access');
   assert.equal(pool.events[0][2], 'reviewed');
-  assert.deepEqual(JSON.parse(pool.audits[0][6]), { decision: 'schedule_debate', status: 'under_debate' });
+  assert.deepEqual(JSON.parse(pool.audits[0][5]), { decision: 'schedule_debate', status: 'under_debate' });
   assert.doesNotMatch(JSON.stringify(pool.audits), /safe drinking water in schools/u);
 });
 
