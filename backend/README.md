@@ -348,7 +348,7 @@ Allowed transitions: draft → published → in progress → concluded; cancella
 
 Mutations require an active server-authenticated clerk/admin session, CSRF token and JSON content type. PostgreSQL validates the actor context, lifecycle transitions, immutable creator, append-only lifecycle events and matching audit records using a deferred constraint trigger. Draft reads are audited. The public view excludes creator IDs and private order-paper storage keys.
 
-Migration 0013 backfills existing sitting rows with baseline events and normalises lifecycle timestamps. It does not deploy or alter a production database automatically. This slice is not yet connected to the Assembly Hall React pages; attendance, order-paper document storage, motions, debates and voting remain future work.
+Migration 0013 backfills existing sitting rows with baseline events and normalises lifecycle timestamps. It does not deploy or alter a production database automatically. This slice is not yet connected to the Assembly Hall React pages; attendance, order-paper document storage, debate queues and voting remain future work. The motion workflow is documented in the next section.
 
 ## Delegate motion submission and clerk review (migration 0014)
 
