@@ -2,7 +2,7 @@
 
 ## Current state
 
-The repository uses React 18 + Vite with the navy-and-gold MCCeAS / Sauti Yetu visual identity preserved. The login, registration/guardian OTP and private concern submission forms are now connected to the API. The Assembly Hall, agenda, member register, motions, voting, Hansard and stakeholder screens remain illustrative; no official parliamentary action is live.
+The repository uses React 18 + Vite with the navy-and-gold MCCeAS / Sauti Yetu visual identity preserved. The login, registration/guardian OTP and private concern submission forms are now connected to the API. The Assembly Hall, agenda, member register, debate, voting, Hansard and stakeholder screens remain illustrative; sitting management and motion submission/review APIs exist but are not yet connected to those screens.
 
 The feature branch now contains a runnable API foundation for child registration, authentication, guardian verification/review and private concern intake/moderation. It does **not** provide a complete or production-ready Assembly service.
 
@@ -34,7 +34,7 @@ The feature branch now contains a runnable API foundation for child registration
 
 - A configured live SMS gateway and guardian self-service consent. The OTP challenge service and HTTPS gateway adapter exist, but no provider endpoint/token is configured. OTP proves phone possession only; it does not establish legal guardianship or informed consent.
 - Adult account provisioning/registration, password recovery, guardian-assisted child recovery, session listing/device management or MFA.
-- Resource-level API endpoints for sittings, motions, debate queues, amendments, votes, resolutions and stakeholder updates. A dedicated safeguarding case-management workflow is also not implemented.
+- Motion submission and clerk review APIs are implemented with a de-identified public projection. Debate queues, amendments, voting, resolutions and stakeholder updates remain unfinished. A dedicated safeguarding case-management workflow is also not implemented.
 - Official Assembly frontend integration for sittings, order papers, motions, debates, amendments, delegate voting, Hansard, member records and stakeholder action. The existing screens for these areas still use illustrative data.
 - A persistent development/staging PostgreSQL environment, deployment, backup/restore or production security review. CI now applies the migrations to a disposable PostgreSQL 16 service.
 
@@ -73,6 +73,8 @@ Migrations in `database/migrations/` are applied in numeric order:
 | `0010_guardian_otp_binding.sql` | Binds verified phone-possession evidence to the correct guardian consent record |
 | `0011_concern_intake_privacy.sql` | Encrypts private concern narratives and separates reviewed public wording from private content |
 | `0012_coordinator_concern_moderation.sql` | Adds county-scoped moderation, second-coordinator publication, append-only moderation events and a location-free public projection |
+| `0013_official_sitting_lifecycle.sql` | Adds sitting lifecycle events, clerk-only transitions and a narrow public sitting projection |
+| `0014_motion_submission_review.sql` | Adds delegate motion submission, clerk review, immutable lifecycle events and a reviewed public motion projection |
 
 The migration runner wraps each migration and its checksum record in one transaction. It uses a PostgreSQL advisory lock to avoid concurrent migration runs and refuses to continue if an already-applied migration's checksum changes. It runs as a separate command so the API process does not need schema-owner privileges.
 
@@ -218,7 +220,7 @@ A public child must not access the official hall or vote. A stakeholder must not
 
 The automated unit suite uses synthetic fixtures and fake database connections. It tests validation, phone normalisation, AES-GCM encryption/tamper rejection, atomic registration rollback, role guards, county-scoped coordinator consent review, audited identity reads, review/activation transaction ordering, rejection and rollback behaviour, migration transaction handling/checksum-drift detection, Argon2 verification paths, generic login failures, session-token hashing, cookie flags and CSRF checks.
 
-The SQL migrations are executed in CI against a disposable PostgreSQL 16 service, including checks for core tables/views, session-revocation triggers, append-only review history, coordinator-only consent approval and county-scope enforcement. No persistent development/staging database is configured. The API has not been deployed or connected to the frontend. Passing unit tests does not establish production readiness.
+The SQL migrations are executed in CI against a disposable PostgreSQL 16 service, including checks for core tables/views, session-revocation triggers, append-only review history, coordinator-only consent approval and county-scope enforcement. No persistent development/staging database is configured. The API has not been deployed. Selected authentication, registration and private-concern screens are connected; official Assembly screens remain illustrative. Passing unit tests does not establish production readiness.
 
 
 ## Guardian phone OTP verification (migration 0009)
@@ -347,3 +349,18 @@ Allowed transitions: draft → published → in progress → concluded; cancella
 Mutations require an active server-authenticated clerk/admin session, CSRF token and JSON content type. PostgreSQL validates the actor context, lifecycle transitions, immutable creator, append-only lifecycle events and matching audit records using a deferred constraint trigger. Draft reads are audited. The public view excludes creator IDs and private order-paper storage keys.
 
 Migration 0013 backfills existing sitting rows with baseline events and normalises lifecycle timestamps. It does not deploy or alter a production database automatically. This slice is not yet connected to the Assembly Hall React pages; attendance, order-paper document storage, motions, debates and voting remain future work.
+
+## Delegate motion submission and clerk review (migration 0014)
+
+- \`POST /api/v1/assembly/motions\` — active delegate with approved, unwithdrawn guardian consent submits a motion to a published or in-progress sitting. Body: \`{ "sittingId": "<uuid>", "title": "Improve access to safe school water", "description": "..." }\`.
+- \`GET /api/v1/assembly/motions/mine\` — delegate retrieves only their own submissions.
+- \`GET /api/v1/clerk/motions?limit=20\` and \`GET /api/v1/clerk/motions/:motionId\` — active clerk or administrator reviews the restricted submission queue and original text.
+- \`POST /api/v1/clerk/motions/:motionId/review\` — one-time review. Use \`{ "decision": "schedule_debate", "publicTitle": "...", "publicSummary": "..." }\`, \`{ "decision": "refer_to_committee", "committee": "Health and Wellbeing", "publicTitle": "...", "publicSummary": "..." }\`, or \`{ "decision": "reject", "reasonCode": "duplicate" }\`.
+- \`GET /api/v1/public/motions?limit=20\` — returns only separately reviewed public wording for motions scheduled for debate, referred to committee or adopted.
+
+Motion numbers are database-generated. Original submission text and proposer identity are restricted to the submitting delegate and authorised clerks. Public readers receive only the reviewed title, summary, committee, status and non-identifying timestamps. The application rejects obvious email addresses, Kenyan mobile numbers and URLs in public wording; this is a basic filter, not comprehensive de-identification. Clerks remain responsible for reviewing context and indirect identifiers.
+
+The database requires the authenticated actor context, active delegate/clerk role, approved guardian consent for delegate submission, an open sitting, an append-only lifecycle event and a matching audit record. Motion text and identity cannot be rewritten after submission, and each submitted motion can receive only one clerk decision. Rejected motions are excluded from the public view.
+
+This backend slice is not yet connected to the React Motions & Voting page. Delegate-role provisioning/independent appointment verification, debate speaker queues, amendments, voting rules and resolution generation remain future work. Do not treat the role value alone as evidence that an election or appointment was independently verified.
+

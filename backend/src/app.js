@@ -47,6 +47,13 @@ import {
   SittingValidationError
 } from './domain/sittings.js';
 import {
+  createMotionService,
+  MotionAccessError,
+  MotionConflictError,
+  MotionNotFoundError,
+  MotionValidationError
+} from './domain/motions.js';
+import {
   clearSessionCookie,
   createSessionResolver,
   issueCsrfToken,
@@ -97,6 +104,7 @@ export function createApp({
   const concerns = createConcernService({ pool, fieldCrypto });
   const concernModeration = createConcernModerationService({ pool, fieldCrypto });
   const sittings = createSittingService({ pool });
+  const motions = createMotionService({ pool });
   const guardianPhoneVerification = createGuardianPhoneVerificationService({
     pool,
     fieldCrypto,
@@ -585,6 +593,86 @@ export function createApp({
     } catch (error) { next(error); }
   });
 
+
+  // Public readers receive only reviewed wording from the narrow motion view.
+  app.get('/api/v1/public/motions', async (req, res, next) => {
+    try {
+      const data = await motions.listPublicMotions({ limit: req.query.limit });
+      res.status(200).json({ data });
+    } catch (error) { next(error); }
+  });
+
+  const delegateMotionAccess = [
+    requireSession, requireAuthenticated, requireRoles('delegate')
+  ];
+  const clerkMotionAccess = [
+    requireSession, requireAuthenticated, requireRoles('clerk', 'admin')
+  ];
+  const motionSubmissionLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: {
+      error: {
+        code: 'MOTION_SUBMISSION_RATE_LIMITED',
+        message: 'Too many motion submissions. Please try again later.'
+      }
+    }
+  });
+
+  app.get('/api/v1/assembly/motions/mine', ...delegateMotionAccess, async (req, res, next) => {
+    try {
+      const data = await motions.listOwnMotions({
+        actorUserId: req.auth.userId, limit: req.query.limit,
+        requestId: req.requestId,
+        networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+      });
+      res.status(200).json({ data });
+    } catch (error) { next(error); }
+  });
+
+  app.post('/api/v1/assembly/motions', ...delegateMotionAccess, requireCsrf, requireJsonContentType, motionSubmissionLimiter, async (req, res, next) => {
+    try {
+      const data = await motions.submitMotion(req.body, {
+        actorUserId: req.auth.userId, requestId: req.requestId,
+        networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+      });
+      res.status(201).json({ data, message: 'Motion submitted for clerk review.' });
+    } catch (error) { next(error); }
+  });
+
+  app.get('/api/v1/clerk/motions', ...clerkMotionAccess, async (req, res, next) => {
+    try {
+      const data = await motions.listClerkQueue({
+        actorUserId: req.auth.userId, limit: req.query.limit,
+        requestId: req.requestId,
+        networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+      });
+      res.status(200).json({ data });
+    } catch (error) { next(error); }
+  });
+
+  app.get('/api/v1/clerk/motions/:motionId', ...clerkMotionAccess, async (req, res, next) => {
+    try {
+      const data = await motions.getClerkMotion(req.params.motionId, {
+        actorUserId: req.auth.userId, requestId: req.requestId,
+        networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+      });
+      res.status(200).json({ data });
+    } catch (error) { next(error); }
+  });
+
+  app.post('/api/v1/clerk/motions/:motionId/review', ...clerkMotionAccess, requireCsrf, requireJsonContentType, async (req, res, next) => {
+    try {
+      const data = await motions.reviewMotion(req.params.motionId, req.body, {
+        actorUserId: req.auth.userId, requestId: req.requestId,
+        networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+      });
+      res.status(200).json({ data, message: 'Motion review decision recorded.' });
+    } catch (error) { next(error); }
+  });
+
   const csrfBootstrapLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 20,
@@ -722,6 +810,27 @@ export function createApp({
           code: 'CONSENT_REVIEW_CONFLICT',
           message: 'This consent request is no longer available for review.'
         }
+      });
+    }
+
+    if (error instanceof MotionValidationError) {
+      return res.status(400).json({
+        error: { code: 'MOTION_VALIDATION_FAILED', message: 'Check the motion details and reviewed public wording.', fields: error.fields }
+      });
+    }
+    if (error instanceof MotionAccessError) {
+      return res.status(403).json({
+        error: { code: 'MOTION_ACCESS_REQUIRED', message: 'An active delegate or authorised clerk is required.' }
+      });
+    }
+    if (error instanceof MotionNotFoundError) {
+      return res.status(404).json({
+        error: { code: 'MOTION_NOT_FOUND', message: 'The motion was not found or is not visible to this account.' }
+      });
+    }
+    if (error instanceof MotionConflictError) {
+      return res.status(409).json({
+        error: { code: 'MOTION_WORKFLOW_CONFLICT', message: 'The motion or sitting has changed and is not eligible for this action.' }
       });
     }
 
