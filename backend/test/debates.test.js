@@ -16,6 +16,7 @@ const context = actorUserId => ({ actorUserId, requestId: 'synthetic-debate-requ
 
 function fakePool({
   motionStatus = 'under_debate',
+  sittingStatus = 'in_progress',
   consent = true,
   failAudit = false,
   requestRows = []
@@ -40,7 +41,7 @@ function fakePool({
       return { rows: consent ? [{ id: 'synthetic-consent' }] : [] };
     }
     if (sql.includes('FROM motions WHERE id = $1 FOR UPDATE')) {
-      return { rows: [{ id: motionId, status: motionStatus }] };
+      return { rows: [{ id: motionId, status: motionStatus, sitting_status: sittingStatus }] };
     }
     if (sql.includes('SELECT id FROM motions WHERE id = $1')) {
       return { rows: [{ id: motionId }] };
@@ -176,6 +177,11 @@ test('speaker requests reject public children, adults, inactive accounts, missin
 
   await assert.rejects(
     createDebateService({ pool: fakePool({ motionStatus: 'submitted' }) })
+      .requestSpeakerSlot(motionId, {}, context(delegate)),
+    DebateConflictError
+  );
+  await assert.rejects(
+    createDebateService({ pool: fakePool({ sittingStatus: 'concluded' }) })
       .requestSpeakerSlot(motionId, {}, context(delegate)),
     DebateConflictError
   );
