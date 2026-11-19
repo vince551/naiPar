@@ -58,8 +58,12 @@ CREATE TABLE debate_request_events (
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(metadata) = 'object'),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (
-    (event_type IN ('baseline', 'requested') AND from_status IS NULL)
-    OR (event_type NOT IN ('baseline', 'requested') AND from_status IS NOT NULL)
+    (event_type = 'baseline' AND from_status IS NULL)
+    OR (event_type = 'requested' AND from_status IS NULL AND to_status = 'pending')
+    OR (event_type = 'approved' AND from_status = 'pending' AND to_status = 'approved')
+    OR (event_type = 'rejected' AND from_status = 'pending' AND to_status = 'rejected')
+    OR (event_type = 'speaker_started' AND from_status = 'approved' AND to_status = 'approved')
+    OR (event_type = 'speaker_finished' AND from_status = 'approved' AND to_status = 'completed')
   )
 );
 
@@ -137,13 +141,13 @@ BEGIN
       RAISE EXCEPTION 'speaker requests require a motion under debate';
     END IF;
 
-    IF NOT EXISTS (
-      SELECT 1
-      FROM guardian_consents
-      WHERE child_user_id = actor_id
-        AND status = 'approved'
-        AND withdrawn_at IS NULL
-    ) THEN
+    PERFORM id
+    FROM guardian_consents
+    WHERE child_user_id = actor_id
+      AND status = 'approved'
+      AND withdrawn_at IS NULL
+    FOR SHARE;
+    IF NOT FOUND THEN
       RAISE EXCEPTION 'approved guardian consent is required for debate participation';
     END IF;
 
@@ -299,14 +303,13 @@ BEGIN
   END IF;
 
   IF NEW.event_type = 'requested' THEN
-    IF actor_role IS DISTINCT FROM 'delegate'
-      OR NEW.from_status IS NOT NULL
-      OR NEW.to_status <> 'pending'
-    THEN
-      RAISE EXCEPTION 'invalid delegate debate request event';
+    IF actor_role IS DISTINCT FROM 'delegate' THEN
+      RAISE EXCEPTION 'only an active delegate may record a debate request event';
     END IF;
-  ELSIF actor_role NOT IN ('clerk', 'admin') THEN
-    RAISE EXCEPTION 'only an active clerk or administrator may record debate management events';
+  ELSE
+    IF actor_role NOT IN ('clerk', 'admin') THEN
+      RAISE EXCEPTION 'only an active clerk or administrator may record debate management events';
+    END IF;
   END IF;
 
   RETURN NEW;
@@ -322,23 +325,35 @@ RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
   expected_event TEXT;
   expected_action TEXT;
+  expected_from debate_request_status;
+  expected_to debate_request_status;
   actor_setting TEXT;
 BEGIN
   IF TG_OP = 'INSERT' THEN
     expected_event := 'requested';
     expected_action := 'debate_request.requested';
+    expected_from := NULL;
+    expected_to := NEW.status;
   ELSIF OLD.status = 'pending' AND NEW.status = 'approved' THEN
     expected_event := 'approved';
     expected_action := 'debate_request.approved';
+    expected_from := OLD.status;
+    expected_to := NEW.status;
   ELSIF OLD.status = 'pending' AND NEW.status = 'rejected' THEN
     expected_event := 'rejected';
     expected_action := 'debate_request.rejected';
+    expected_from := OLD.status;
+    expected_to := NEW.status;
   ELSIF OLD.speaking_started_at IS NULL AND NEW.speaking_started_at IS NOT NULL THEN
     expected_event := 'speaker_started';
     expected_action := 'debate_request.speaker_started';
+    expected_from := OLD.status;
+    expected_to := NEW.status;
   ELSIF OLD.status = 'approved' AND NEW.status = 'completed' THEN
     expected_event := 'speaker_finished';
     expected_action := 'debate_request.speaker_finished';
+    expected_from := OLD.status;
+    expected_to := NEW.status;
   ELSE
     RETURN NEW;
   END IF;
@@ -354,6 +369,8 @@ BEGIN
     WHERE debate_request_id = NEW.id
       AND actor_user_id::text = actor_setting
       AND event_type = expected_event
+      AND from_status IS NOT DISTINCT FROM expected_from
+      AND to_status = expected_to
       AND created_at = NEW.updated_at
   ) THEN
     RAISE EXCEPTION 'debate request change requires matching append-only lifecycle event';
