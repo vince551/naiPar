@@ -132,13 +132,17 @@ BEGIN
       RAISE EXCEPTION 'only an active delegate may create an unreviewed speaker request';
     END IF;
 
-    SELECT status::text INTO motion_state
-    FROM motions
-    WHERE id = NEW.motion_id
-    FOR UPDATE;
+    SELECT motion.status::text, sitting.status::text
+    INTO motion_state, sitting_state
+    FROM motions AS motion
+    JOIN sittings AS sitting ON sitting.id = motion.sitting_id
+    WHERE motion.id = NEW.motion_id
+    FOR UPDATE OF motion, sitting;
 
-    IF motion_state IS DISTINCT FROM 'under_debate' THEN
-      RAISE EXCEPTION 'speaker requests require a motion under debate';
+    IF motion_state IS DISTINCT FROM 'under_debate'
+      OR sitting_state NOT IN ('published', 'in_progress')
+    THEN
+      RAISE EXCEPTION 'speaker requests require an open sitting and a motion under debate';
     END IF;
 
     PERFORM id
@@ -177,10 +181,12 @@ BEGIN
     RAISE EXCEPTION 'active clerk or administrator required for debate management';
   END IF;
 
-  SELECT status::text INTO motion_state
-  FROM motions
-  WHERE id = OLD.motion_id
-  FOR UPDATE;
+  SELECT motion.status::text, sitting.status::text
+  INTO motion_state, sitting_state
+  FROM motions AS motion
+  JOIN sittings AS sitting ON sitting.id = motion.sitting_id
+  WHERE motion.id = OLD.motion_id
+  FOR UPDATE OF motion, sitting;
 
   IF OLD.status = 'pending' AND NEW.status IN ('approved', 'rejected') THEN
     IF OLD.reviewed_by IS NOT NULL OR OLD.reviewed_at IS NOT NULL
@@ -196,6 +202,7 @@ BEGIN
       IF NEW.queue_position IS NULL OR NEW.queue_position < 1
         OR NEW.review_reason_code IS NOT NULL
         OR motion_state IS DISTINCT FROM 'under_debate'
+        OR sitting_state NOT IN ('published', 'in_progress')
       THEN
         RAISE EXCEPTION 'approved speaker request requires an open debate and queue position';
       END IF;
@@ -220,6 +227,7 @@ BEGIN
       OR NEW.queue_position IS DISTINCT FROM OLD.queue_position
       OR NEW.review_reason_code IS DISTINCT FROM OLD.review_reason_code
       OR motion_state IS DISTINCT FROM 'under_debate'
+      OR sitting_state NOT IN ('published', 'in_progress')
     THEN
       RAISE EXCEPTION 'speaker start may only record the start timestamp during an open debate';
     END IF;
@@ -260,6 +268,7 @@ BEGIN
       OR NEW.queue_position IS DISTINCT FROM OLD.queue_position
       OR NEW.review_reason_code IS DISTINCT FROM OLD.review_reason_code
       OR NEW.speaking_started_at IS DISTINCT FROM OLD.speaking_started_at
+      OR motion_state IS DISTINCT FROM 'under_debate'
     THEN
       RAISE EXCEPTION 'speaker finish may only record the end timestamp and completed status';
     END IF;
