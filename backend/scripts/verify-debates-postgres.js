@@ -200,6 +200,31 @@ try {
     fail('Debate queue public isolation or active-speaker index is incorrect');
   }
 
+  const closedSitting = await sittings.createSitting({
+    title: 'Synthetic closed sitting for debate access test',
+    sessionNumber: 16,
+    scheduledAt: '2027-03-16T09:00:00+03:00',
+    venue: 'Synthetic Assembly Hall'
+  }, context(clerk));
+  await sittings.transitionSitting(closedSitting.id, { status: 'published' }, context(clerk));
+  const closedMotion = await motions.submitMotion({
+    sittingId: closedSitting.id,
+    title: 'Improve accessible school transport',
+    description: 'This private proposal asks the Assembly to review accessible transport for learners.'
+  }, context(secondDelegate));
+  await motions.reviewMotion(closedMotion.id, {
+    decision: 'schedule_debate',
+    publicTitle: 'Improve accessible school transport',
+    publicSummary: 'The Assembly will debate accessible transport improvements for learners.'
+  }, context(clerk));
+  await sittings.transitionSitting(closedSitting.id, { status: 'in_progress' }, context(clerk));
+  await sittings.transitionSitting(closedSitting.id, { status: 'concluded' }, context(clerk));
+  await expectRejected(
+    () => debates.requestSpeakerSlot(closedMotion.id, {}, context(secondDelegate)),
+    'not available',
+    'Delegate requested a speaking slot after the sitting concluded'
+  );
+
   process.stdout.write('Debate speaker queue and floor lifecycle integrity passed\n');
 } finally {
   await pool.end();
