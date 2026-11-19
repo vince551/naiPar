@@ -54,6 +54,13 @@ import {
   MotionValidationError
 } from './domain/motions.js';
 import {
+  createDebateService,
+  DebateAccessError,
+  DebateConflictError,
+  DebateNotFoundError,
+  DebateValidationError
+} from './domain/debates.js';
+import {
   clearSessionCookie,
   createSessionResolver,
   issueCsrfToken,
@@ -105,6 +112,7 @@ export function createApp({
   const concernModeration = createConcernModerationService({ pool, fieldCrypto });
   const sittings = createSittingService({ pool });
   const motions = createMotionService({ pool });
+  const debates = createDebateService({ pool });
   const guardianPhoneVerification = createGuardianPhoneVerificationService({
     pool,
     fieldCrypto,
@@ -673,6 +681,99 @@ export function createApp({
     } catch (error) { next(error); }
   });
 
+  const delegateDebateAccess = [
+    requireSession, requireAuthenticated, requireRoles('delegate')
+  ];
+  const clerkDebateAccess = [
+    requireSession, requireAuthenticated, requireRoles('clerk', 'admin')
+  ];
+  const debateRequestLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: {
+      error: {
+        code: 'DEBATE_REQUEST_RATE_LIMITED',
+        message: 'Too many speaking requests. Please try again later.'
+      }
+    }
+  });
+
+  app.post('/api/v1/assembly/motions/:motionId/debate-requests',
+    ...delegateDebateAccess, requireCsrf, requireJsonContentType, debateRequestLimiter,
+    async (req, res, next) => {
+      try {
+        const data = await debates.requestSpeakerSlot(req.params.motionId, req.body, {
+          actorUserId: req.auth.userId, requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(201).json({ data, message: 'Speaking request submitted for clerk review.' });
+      } catch (error) { next(error); }
+    }
+  );
+
+  app.get('/api/v1/assembly/debate-requests/mine', ...delegateDebateAccess, async (req, res, next) => {
+    try {
+      const data = await debates.listOwnRequests({
+        actorUserId: req.auth.userId, limit: req.query.limit,
+        requestId: req.requestId,
+        networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+      });
+      res.status(200).json({ data });
+    } catch (error) { next(error); }
+  });
+
+  app.get('/api/v1/clerk/motions/:motionId/debate-requests', ...clerkDebateAccess, async (req, res, next) => {
+    try {
+      const data = await debates.listClerkQueue(req.params.motionId, {
+        actorUserId: req.auth.userId, limit: req.query.limit,
+        requestId: req.requestId,
+        networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+      });
+      res.status(200).json({ data });
+    } catch (error) { next(error); }
+  });
+
+  app.post('/api/v1/clerk/debate-requests/:requestId/review',
+    ...clerkDebateAccess, requireCsrf, requireJsonContentType,
+    async (req, res, next) => {
+      try {
+        const data = await debates.reviewRequest(req.params.requestId, req.body, {
+          actorUserId: req.auth.userId, requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(200).json({ data, message: 'Speaking request reviewed.' });
+      } catch (error) { next(error); }
+    }
+  );
+
+  app.post('/api/v1/clerk/debate-requests/:requestId/start',
+    ...clerkDebateAccess, requireCsrf, requireJsonContentType,
+    async (req, res, next) => {
+      try {
+        const data = await debates.startSpeaker(req.params.requestId, req.body, {
+          actorUserId: req.auth.userId, requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(200).json({ data, message: 'Speaker is now on the floor.' });
+      } catch (error) { next(error); }
+    }
+  );
+
+  app.post('/api/v1/clerk/debate-requests/:requestId/finish',
+    ...clerkDebateAccess, requireCsrf, requireJsonContentType,
+    async (req, res, next) => {
+      try {
+        const data = await debates.finishSpeaker(req.params.requestId, req.body, {
+          actorUserId: req.auth.userId, requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(200).json({ data, message: 'Speaker turn completed.' });
+      } catch (error) { next(error); }
+    }
+  );
+
   const csrfBootstrapLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 20,
@@ -831,6 +932,27 @@ export function createApp({
     if (error instanceof MotionConflictError) {
       return res.status(409).json({
         error: { code: 'MOTION_WORKFLOW_CONFLICT', message: 'The motion or sitting has changed and is not eligible for this action.' }
+      });
+    }
+
+    if (error instanceof DebateValidationError) {
+      return res.status(400).json({
+        error: { code: 'DEBATE_VALIDATION_FAILED', message: 'Check the speaking request or review details.', fields: error.fields }
+      });
+    }
+    if (error instanceof DebateAccessError) {
+      return res.status(403).json({
+        error: { code: 'DEBATE_ACCESS_REQUIRED', message: 'An active delegate or authorised clerk is required.' }
+      });
+    }
+    if (error instanceof DebateNotFoundError) {
+      return res.status(404).json({
+        error: { code: 'DEBATE_REQUEST_NOT_FOUND', message: 'The debate request or motion was not found.' }
+      });
+    }
+    if (error instanceof DebateConflictError) {
+      return res.status(409).json({
+        error: { code: 'DEBATE_WORKFLOW_CONFLICT', message: 'The request, queue order or floor state has changed.' }
       });
     }
 
