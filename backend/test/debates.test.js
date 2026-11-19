@@ -191,6 +191,7 @@ test('speaker request validates motion identifiers and rejects unexpected reques
   const service = createDebateService({ pool: fakePool() });
   await assert.rejects(service.requestSpeakerSlot('not-a-uuid', {}, context(delegate)), DebateValidationError);
   await assert.rejects(service.requestSpeakerSlot(motionId, { note: 'private details' }, context(delegate)), DebateValidationError);
+  await assert.rejects(service.requestSpeakerSlot(motionId, [], context(delegate)), DebateValidationError);
 });
 
 test('a delegate cannot submit a second pending, approved or completed request for the same motion', async () => {
