@@ -2,7 +2,7 @@
 
 ## Current state
 
-The repository uses React 18 + Vite with the navy-and-gold MCCeAS / Sauti Yetu visual identity preserved. The login, registration/guardian OTP and private concern submission forms are now connected to the API. The Assembly Hall, agenda, member register, debate, voting, Hansard and stakeholder screens remain illustrative; sitting management and motion submission/review APIs exist but are not yet connected to those screens.
+The repository uses React 18 + Vite with the navy-and-gold MCCeAS / Sauti Yetu visual identity preserved. The login, registration/guardian OTP and private concern submission forms are connected to the API. Sitting lifecycle, motion submission/review and debate speaker queue APIs now exist, but the official Assembly, agenda, debate, voting, member register, Hansard and stakeholder screens remain illustrative.
 
 The feature branch now contains a runnable API foundation for child registration, authentication, guardian verification/review and private concern intake/moderation. It does **not** provide a complete or production-ready Assembly service.
 
@@ -75,6 +75,7 @@ Migrations in `database/migrations/` are applied in numeric order:
 | `0012_coordinator_concern_moderation.sql` | Adds county-scoped moderation, second-coordinator publication, append-only moderation events and a location-free public projection |
 | `0013_official_sitting_lifecycle.sql` | Adds sitting lifecycle events, clerk-only transitions and a narrow public sitting projection |
 | `0014_motion_submission_review.sql` | Adds delegate motion submission, clerk review, immutable lifecycle events and a reviewed public motion projection |
+| `0015_debate_speaker_queue.sql` | Adds guardian-consent-gated speaker requests, clerk allocation, one active speaker per motion, append-only debate events and actor/event/audit enforcement |
 
 The migration runner wraps each migration and its checksum record in one transaction. It uses a PostgreSQL advisory lock to avoid concurrent migration runs and refuses to continue if an already-applied migration's checksum changes. It runs as a separate command so the API process does not need schema-owner privileges.
 
@@ -333,7 +334,7 @@ After a browser reload, the HttpOnly session cookie remains available but the ra
 
 The React application uses `src/api.js` for same-origin requests. The login modal calls the real login endpoint, restores an existing session on page load, refreshes the CSRF token through the JSON-only bootstrap route, and revokes the session on sign-out. Child registration creates a pending request and offers guardian OTP request/verification. The Share Your Voice form submits to the private concern endpoint only for an authenticated child/delegate account. The browser never stores the HttpOnly session token or the CSRF token in localStorage.
 
-The Vite development server proxies `/api` to `SAUTI_YETU_API_TARGET` (default `http://127.0.0.1:4000`). Production must use a same-origin reverse proxy. The API has no permissive CORS configuration. Assembly Hall, motions, debate, voting, member register, Hansard and stakeholder pages remain demonstration data; no official parliamentary action is connected. The UI explicitly warns that this integration is development-only. The debate API is implemented but the debate and speaker-queue screens remain illustrative; no official parliamentary action is yet connected to those React screens. Do not enter real children's data or credentials until a secured staging environment, approved SMS provider, trained coordinator workflow, safeguarding review and privacy approval exist.
+The Vite development server proxies `/api` to `SAUTI_YETU_API_TARGET` (default `http://127.0.0.1:4000`). Production must use a same-origin reverse proxy. The API has no permissive CORS configuration. Assembly Hall, motions, debate, voting, member register, Hansard and stakeholder pages remain demonstration data; the sitting, motion and debate APIs are not yet connected to those React screens. No public debate queue or vote API exists. The UI explicitly warns that this integration is development-only. Do not enter real children's data or credentials until a secured staging environment, approved SMS provider, trained coordinator workflow, safeguarding review and privacy approval exist.
 
 
 ## Official sitting lifecycle (migration 0013)
@@ -348,7 +349,7 @@ Allowed transitions: draft → published → in progress → concluded; cancella
 
 Mutations require an active server-authenticated clerk/admin session, CSRF token and JSON content type. PostgreSQL validates the actor context, lifecycle transitions, immutable creator, append-only lifecycle events and matching audit records using a deferred constraint trigger. Draft reads are audited. The public view excludes creator IDs and private order-paper storage keys.
 
-Migration 0013 backfills existing sitting rows with baseline events and normalises lifecycle timestamps. It does not deploy or alter a production database automatically. This slice is not yet connected to the Assembly Hall React pages; attendance, order-paper document storage, debate queues and voting remain future work. The motion workflow is documented in the next section.
+Migration 0013 backfills existing sitting rows with baseline events and normalises lifecycle timestamps. It does not deploy or alter a production database automatically. This slice is not yet connected to the Assembly Hall React pages; attendance and order-paper document storage remain future work. The debate speaker queue is documented in migration 0015. The motion workflow is documented in the next section.
 
 ## Delegate motion submission and clerk review (migration 0014)
 
