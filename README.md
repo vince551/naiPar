@@ -12,6 +12,8 @@
 - Vite
 - Lucide React
 - Responsive CSS
+- Node.js 22 + Express 5 API
+- PostgreSQL with versioned, checksum-verified migrations
 
 ## Run locally
 ```bash
@@ -37,7 +39,7 @@ MCCeAS means **Mombasa County Children E-Assembly**. “Sauti Yetu” is the pla
 
 ## Backend development status
 
-The API now includes child registration, login/session handling, guardian phone OTP, coordinator consent review, private concern intake and moderation. The React login, registration/OTP and private concern forms are connected to these routes; official Assembly screens remain illustrative. See [backend/README.md](backend/README.md) for local setup, migrations, tests and security limitations. The API is not deployed and has no persistent staging database or configured SMS provider. Do not enter real children's information or real credentials.
+The API now includes child registration, login/session handling, guardian phone OTP, coordinator consent review, private concern intake/moderation, official sitting lifecycle, delegate motion submission/clerk review, and a restricted debate speaker queue. The React login, registration/OTP and private concern forms are connected to these routes; the sitting, motion and debate APIs are not yet connected to the official Assembly screens. See [backend/README.md](backend/README.md) for local setup, migrations, tests and security limitations. The API is not deployed and has no persistent staging database or configured SMS provider. Do not enter real children's information or real credentials.
 
 
 ## Connect the browser to the API
