@@ -100,6 +100,7 @@ DECLARE
   actor_role TEXT;
   actor_status TEXT;
   motion_state TEXT;
+  sitting_state TEXT;
 BEGIN
   actor_setting := nullif(current_setting('app.actor_user_id', true), '');
   IF actor_setting IS NULL THEN
