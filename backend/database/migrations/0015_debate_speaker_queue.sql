@@ -56,13 +56,13 @@ CREATE TABLE debate_request_events (
   to_status debate_request_status NOT NULL,
   request_id TEXT CHECK (request_id IS NULL OR length(request_id) <= 128),
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(metadata) = 'object'),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (
     (event_type = 'baseline' AND metadata = '{"backfilled":true}'::jsonb)
     OR (event_type = 'requested' AND metadata = '{}'::jsonb)
     OR (event_type IN ('approved', 'rejected') AND metadata - ARRAY['queuePosition', 'allocatedSeconds', 'reasonCode'] = '{}'::jsonb)
     OR (event_type IN ('speaker_started', 'speaker_finished') AND metadata - ARRAY['queuePosition', 'allocatedSeconds'] = '{}'::jsonb)
   ),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (
     (event_type = 'baseline' AND from_status IS NULL)
     OR (event_type = 'requested' AND from_status IS NULL AND to_status = 'pending')
