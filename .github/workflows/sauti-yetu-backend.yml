@@ -96,6 +96,9 @@ jobs:
                 to_regclass('public.public_sitting_summary') AS public_sitting_view,
                 to_regclass('public.motion_lifecycle_events') AS motion_lifecycle_events_table,
                 to_regclass('public.public_motion_summary') AS public_motion_view,
+                to_regclass('public.debate_request_events') AS debate_request_events_table,
+                to_regclass('public.debate_queue_position_unique') AS debate_queue_position_index,
+                to_regclass('public.debate_one_active_speaker_per_motion') AS debate_active_speaker_index,
                 to_regclass('public.stakeholder_resolution_summary') AS stakeholder_view,
                 to_regclass('public.concerns_submitter_created_idx') AS concerns_owner_index,
                 (SELECT count(*) FROM pg_constraint WHERE conname = 'concerns_private_content_encrypted_check') AS encrypted_concern_constraint,
@@ -117,11 +120,14 @@ jobs:
               !row.public_sitting_view ||
               !row.motion_lifecycle_events_table ||
               !row.public_motion_view ||
+              !row.debate_request_events_table ||
+              !row.debate_queue_position_index ||
+              !row.debate_active_speaker_index ||
               !row.stakeholder_view ||
               !row.concerns_owner_index ||
               Number(row.encrypted_concern_constraint) !== 1 ||
               Number(row.redacted_public_projection_constraint) !== 1 ||
-              Number(row.migration_count) !== 14
+              Number(row.migration_count) !== 15
             ) {
               throw new Error('One or more expected schema objects are missing');
             }
@@ -450,6 +456,8 @@ jobs:
         run: node scripts/verify-sittings-postgres.js
       - name: Verify delegate motion submission, clerk review and public projection
         run: node scripts/verify-motions-postgres.js
+      - name: Verify debate speaker queue and floor lifecycle
+        run: node scripts/verify-debates-postgres.js
       - name: Smoke-test API health endpoints
         run: |
           node src/server.js > /tmp/sauti-yetu-api.log 2>&1 &
