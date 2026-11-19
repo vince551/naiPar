@@ -40,7 +40,7 @@ function fakePool({
     if (sql.includes('FROM guardian_consents WHERE child_user_id')) {
       return { rows: consent ? [{ id: 'synthetic-consent' }] : [] };
     }
-    if (sql.includes('FROM motions WHERE id = $1 FOR UPDATE')) {
+    if (sql.includes('FROM motions AS motion JOIN sittings AS sitting') && sql.includes('FOR UPDATE OF motion, sitting')) {
       return { rows: [{ id: motionId, status: motionStatus, sitting_status: sittingStatus }] };
     }
     if (sql.includes('SELECT id FROM motions WHERE id = $1')) {
