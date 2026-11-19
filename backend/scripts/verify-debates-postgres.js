@@ -104,12 +104,12 @@ try {
 
   await expectRejected(
     () => debates.listClerkQueue(motion.id, context(stakeholder)),
-    'authorised active delegate or clerk',
+    'active delegate or authorised clerk',
     'Stakeholder accessed the restricted debate queue'
   );
   await expectRejected(
     () => debates.listOwnRequests(context(stakeholder)),
-    'authorised active delegate or clerk',
+    'active delegate or authorised clerk',
     'Stakeholder accessed a delegate speaker request list'
   );
 
