@@ -120,14 +120,19 @@ async function requireClerk(client, actorUserId) {
     throw new DebateAccessError();
   }
 }
-async function lockDebatableMotion(client, motionId) {
+async function lockDebatableMotion(client, motionId, requireOpenSitting = true) {
   const result = await client.query(
-    'SELECT id, status::text AS status FROM motions WHERE id = $1 FOR UPDATE',
+    'SELECT motion.id, motion.status::text AS status, sitting.status::text AS sitting_status ' +
+    'FROM motions AS motion JOIN sittings AS sitting ON sitting.id = motion.sitting_id ' +
+    'WHERE motion.id = $1 FOR UPDATE OF motion, sitting',
     [motionId]
   );
   const motion = result.rows?.[0];
   if (!motion) throw new DebateNotFoundError();
   if (motion.status !== 'under_debate') throw new DebateConflictError();
+  if (requireOpenSitting && !['published', 'in_progress'].includes(motion.sitting_status)) {
+    throw new DebateConflictError();
+  }
   return motion;
 }
 async function requestMotionId(client, requestId) {
@@ -265,16 +270,9 @@ export function createDebateService({ pool }) {
       await setActor(client, context.actorUserId);
       await requireClerk(client, context.actorUserId);
       const motionId = await requestMotionId(client, requestId);
-      const motion = await client.query(
-        'SELECT id, status::text AS status FROM motions WHERE id = $1 FOR UPDATE',
-        [motionId]
-      );
-      if (!motion.rows?.[0]) throw new DebateNotFoundError();
+      await lockDebatableMotion(client, motionId, input.decision === 'approve');
       const current = await loadRequestForUpdate(client, requestId);
       if (current.status !== 'pending') throw new DebateConflictError();
-      if (input.decision === 'approve' && motion.rows[0].status !== 'under_debate') {
-        throw new DebateConflictError();
-      }
 
       let queuePosition = null;
       let nextStatus = 'rejected';
@@ -366,7 +364,7 @@ export function createDebateService({ pool }) {
       await setActor(client, context.actorUserId);
       await requireClerk(client, context.actorUserId);
       const motionId = await requestMotionId(client, requestId);
-      await lockDebatableMotion(client, motionId);
+      await lockDebatableMotion(client, motionId, false);
       const current = await loadRequestForUpdate(client, requestId);
       if (current.status !== 'approved' || !current.speaking_started_at || current.speaking_ended_at) {
         throw new DebateConflictError();
