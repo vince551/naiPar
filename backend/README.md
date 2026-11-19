@@ -34,7 +34,7 @@ The feature branch now contains a runnable API foundation for child registration
 
 - A configured live SMS gateway and guardian self-service consent. The OTP challenge service and HTTPS gateway adapter exist, but no provider endpoint/token is configured. OTP proves phone possession only; it does not establish legal guardianship or informed consent.
 - Adult account provisioning/registration, password recovery, guardian-assisted child recovery, session listing/device management or MFA.
-- Motion submission and clerk review APIs are implemented with a de-identified public projection. Debate queues, amendments, voting, resolutions and stakeholder updates remain unfinished. A dedicated safeguarding case-management workflow is also not implemented.
+- Motion submission, clerk review and a restricted debate speaker queue are implemented with de-identified public motion wording. Amendments, voting, resolution generation and stakeholder updates remain unfinished. A dedicated safeguarding case-management workflow is also not implemented.
 - Official Assembly frontend integration for sittings, order papers, motions, debates, amendments, delegate voting, Hansard, member records and stakeholder action. The existing screens for these areas still use illustrative data.
 - A persistent development/staging PostgreSQL environment, deployment, backup/restore or production security review. CI now applies the migrations to a disposable PostgreSQL 16 service.
 
@@ -333,7 +333,7 @@ After a browser reload, the HttpOnly session cookie remains available but the ra
 
 The React application uses `src/api.js` for same-origin requests. The login modal calls the real login endpoint, restores an existing session on page load, refreshes the CSRF token through the JSON-only bootstrap route, and revokes the session on sign-out. Child registration creates a pending request and offers guardian OTP request/verification. The Share Your Voice form submits to the private concern endpoint only for an authenticated child/delegate account. The browser never stores the HttpOnly session token or the CSRF token in localStorage.
 
-The Vite development server proxies `/api` to `SAUTI_YETU_API_TARGET` (default `http://127.0.0.1:4000`). Production must use a same-origin reverse proxy. The API has no permissive CORS configuration. Assembly Hall, motions, debate, voting, member register, Hansard and stakeholder pages remain demonstration data; no official parliamentary action is connected. The UI explicitly warns that this integration is development-only. Do not enter real children's data or credentials until a secured staging environment, approved SMS provider, trained coordinator workflow, safeguarding review and privacy approval exist.
+The Vite development server proxies `/api` to `SAUTI_YETU_API_TARGET` (default `http://127.0.0.1:4000`). Production must use a same-origin reverse proxy. The API has no permissive CORS configuration. Assembly Hall, motions, debate, voting, member register, Hansard and stakeholder pages remain demonstration data; no official parliamentary action is connected. The UI explicitly warns that this integration is development-only. The debate API is implemented but the debate and speaker-queue screens remain illustrative. Do not enter real children's data or credentials until a secured staging environment, approved SMS provider, trained coordinator workflow, safeguarding review and privacy approval exist.
 
 
 ## Official sitting lifecycle (migration 0013)
@@ -364,3 +364,19 @@ The database requires the authenticated actor context, active delegate/clerk rol
 
 This backend slice is not yet connected to the React Motions & Voting page. Delegate-role provisioning/independent appointment verification, debate speaker queues, amendments, voting rules and resolution generation remain future work. Do not treat the role value alone as evidence that an election or appointment was independently verified.
 
+
+
+## Debate speaker requests and floor management (migration 0015)
+
+- \`POST /api/v1/assembly/motions/:motionId/debate-requests\` — an active delegate with approved, unwithdrawn guardian consent requests one speaking slot on a motion already under debate. The request body must be an empty JSON object; the service does not collect a free-text explanation or extra child data.
+- \`GET /api/v1/assembly/debate-requests/mine\` — a delegate retrieves only their own speaker requests and the reviewed public motion title.
+- \`GET /api/v1/clerk/motions/:motionId/debate-requests\` — an active clerk or administrator views the restricted queue, including delegate account identifiers needed for official allocation. Stakeholders and public-child accounts cannot read it.
+- \`POST /api/v1/clerk/debate-requests/:requestId/review\` — approve with \`{ "decision": "approve", "allocatedSeconds": 120 }\` (30–600 seconds; defaults to 120), or reject with \`{ "decision": "reject", "reasonCode": "capacity" }\`. Rejection reasons are controlled codes, not free-text notes.
+- \`POST /api/v1/clerk/debate-requests/:requestId/start\` — records the server-side start time for the first eligible approved speaker. The request body is an empty JSON object.
+- \`POST /api/v1/clerk/debate-requests/:requestId/finish\` — records the server-side end time and completes the speaker turn. The request body is an empty JSON object.
+
+The database locks the motion while requests are submitted or allocated, assigns sequential queue positions, prevents duplicate active/completed requests by the same delegate, and enforces one active speaker per motion. A later speaker cannot start while an earlier approved speaker is waiting. The delegate must have active account status and approved, unwithdrawn guardian consent at request time. Only clerks and administrators can review, start or finish turns.
+
+Migration 0015 adds append-only \`debate_request_events\`, a unique queue-position index, a partial unique active-speaker index, controlled review reason codes and database triggers requiring a transaction-local authenticated actor, lifecycle event and matching audit row for each mutation. There is intentionally no public debate queue or speaker-identity projection. The API returns no guardian data or child narrative.
+
+The current slice records actual start/end timestamps but does not automatically stop a speaker at the allocated duration; the clerk remains responsible for ending the turn. It is not yet connected to the React debate interface. Debate transcript/Hansard capture, amendments, quorum rules and voting remain future work. The existing role field is not proof of independent delegate appointment verification.
