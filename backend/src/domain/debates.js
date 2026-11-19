@@ -30,8 +30,10 @@ function validateLimit(value) {
   return Number(text);
 }
 function validateEmptyBody(payload) {
-  const input = object(payload);
-  if (Object.keys(input).length) throw new DebateValidationError(['request']);
+  if (payload === undefined || payload === null) return;
+  if (typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).length) {
+    throw new DebateValidationError(['request']);
+  }
 }
 function validateReview(payload) {
   const input = object(payload);
