@@ -34,7 +34,7 @@ The feature branch now contains a runnable API foundation for child registration
 
 - A configured live SMS gateway and guardian self-service consent. The OTP challenge service and HTTPS gateway adapter exist, but no provider endpoint/token is configured. OTP proves phone possession only; it does not establish legal guardianship or informed consent.
 - Adult account provisioning/registration, password recovery, guardian-assisted child recovery, session listing/device management or MFA.
-- Motion submission, clerk review and a restricted debate speaker queue are implemented with de-identified public motion wording. Amendments, voting, resolution generation and stakeholder updates remain unfinished. A dedicated safeguarding case-management workflow is also not implemented.
+- Motion amendments, voting, resolution generation and stakeholder updates remain unfinished. A dedicated safeguarding case-management workflow is also not implemented.
 - Official Assembly frontend integration for sittings, order papers, motions, debates, amendments, delegate voting, Hansard, member records and stakeholder action. The existing screens for these areas still use illustrative data.
 - A persistent development/staging PostgreSQL environment, deployment, backup/restore or production security review. CI now applies the migrations to a disposable PostgreSQL 16 service.
 
@@ -333,7 +333,7 @@ After a browser reload, the HttpOnly session cookie remains available but the ra
 
 The React application uses `src/api.js` for same-origin requests. The login modal calls the real login endpoint, restores an existing session on page load, refreshes the CSRF token through the JSON-only bootstrap route, and revokes the session on sign-out. Child registration creates a pending request and offers guardian OTP request/verification. The Share Your Voice form submits to the private concern endpoint only for an authenticated child/delegate account. The browser never stores the HttpOnly session token or the CSRF token in localStorage.
 
-The Vite development server proxies `/api` to `SAUTI_YETU_API_TARGET` (default `http://127.0.0.1:4000`). Production must use a same-origin reverse proxy. The API has no permissive CORS configuration. Assembly Hall, motions, debate, voting, member register, Hansard and stakeholder pages remain demonstration data; no official parliamentary action is connected. The UI explicitly warns that this integration is development-only. The debate API is implemented but the debate and speaker-queue screens remain illustrative. Do not enter real children's data or credentials until a secured staging environment, approved SMS provider, trained coordinator workflow, safeguarding review and privacy approval exist.
+The Vite development server proxies `/api` to `SAUTI_YETU_API_TARGET` (default `http://127.0.0.1:4000`). Production must use a same-origin reverse proxy. The API has no permissive CORS configuration. Assembly Hall, motions, debate, voting, member register, Hansard and stakeholder pages remain demonstration data; no official parliamentary action is connected. The UI explicitly warns that this integration is development-only. The debate API is implemented but the debate and speaker-queue screens remain illustrative; no official parliamentary action is yet connected to those React screens. Do not enter real children's data or credentials until a secured staging environment, approved SMS provider, trained coordinator workflow, safeguarding review and privacy approval exist.
 
 
 ## Official sitting lifecycle (migration 0013)
