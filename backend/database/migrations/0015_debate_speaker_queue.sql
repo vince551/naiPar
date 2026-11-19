@@ -56,6 +56,12 @@ CREATE TABLE debate_request_events (
   to_status debate_request_status NOT NULL,
   request_id TEXT CHECK (request_id IS NULL OR length(request_id) <= 128),
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(metadata) = 'object'),
+  CHECK (
+    (event_type = 'baseline' AND metadata = '{"backfilled":true}'::jsonb)
+    OR (event_type = 'requested' AND metadata = '{}'::jsonb)
+    OR (event_type IN ('approved', 'rejected') AND metadata - ARRAY['queuePosition', 'allocatedSeconds', 'reasonCode'] = '{}'::jsonb)
+    OR (event_type IN ('speaker_started', 'speaker_finished') AND metadata - ARRAY['queuePosition', 'allocatedSeconds'] = '{}'::jsonb)
+  ),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (
     (event_type = 'baseline' AND from_status IS NULL)
@@ -129,6 +135,7 @@ BEGIN
       OR NEW.queue_position IS NOT NULL
       OR NEW.review_reason_code IS NOT NULL
       OR NEW.allocated_seconds <> 120
+      OR NEW.requested_at IS DISTINCT FROM now()
     THEN
       RAISE EXCEPTION 'only an active delegate may create an unreviewed speaker request';
     END IF;
@@ -192,7 +199,7 @@ BEGIN
   IF OLD.status = 'pending' AND NEW.status IN ('approved', 'rejected') THEN
     IF OLD.reviewed_by IS NOT NULL OR OLD.reviewed_at IS NOT NULL
       OR NEW.reviewed_by IS DISTINCT FROM actor_id
-      OR NEW.reviewed_at IS NULL
+      OR NEW.reviewed_at IS DISTINCT FROM now()
       OR NEW.speaking_started_at IS NOT NULL
       OR NEW.speaking_ended_at IS NOT NULL
     THEN
@@ -201,6 +208,10 @@ BEGIN
 
     IF NEW.status = 'approved' THEN
       IF NEW.queue_position IS NULL OR NEW.queue_position < 1
+        OR NEW.queue_position IS DISTINCT FROM (
+          SELECT COALESCE(MAX(queue_position), 0) + 1
+          FROM debate_requests WHERE motion_id = OLD.motion_id
+        )
         OR NEW.review_reason_code IS NOT NULL
         OR motion_state IS DISTINCT FROM 'under_debate'
         OR sitting_state NOT IN ('published', 'in_progress')
@@ -222,7 +233,8 @@ BEGIN
     AND NEW.speaking_started_at IS NOT NULL
     AND NEW.speaking_ended_at IS NULL
   THEN
-    IF NEW.reviewed_by IS DISTINCT FROM OLD.reviewed_by
+    IF NEW.speaking_started_at IS DISTINCT FROM now()
+      OR NEW.reviewed_by IS DISTINCT FROM OLD.reviewed_by
       OR NEW.reviewed_at IS DISTINCT FROM OLD.reviewed_at
       OR NEW.allocated_seconds IS DISTINCT FROM OLD.allocated_seconds
       OR NEW.queue_position IS DISTINCT FROM OLD.queue_position
@@ -269,6 +281,8 @@ BEGIN
       OR NEW.queue_position IS DISTINCT FROM OLD.queue_position
       OR NEW.review_reason_code IS DISTINCT FROM OLD.review_reason_code
       OR NEW.speaking_started_at IS DISTINCT FROM OLD.speaking_started_at
+      OR NEW.speaking_ended_at IS DISTINCT FROM now()
+      OR NEW.speaking_ended_at < OLD.speaking_started_at
       OR motion_state IS DISTINCT FROM 'under_debate'
     THEN
       RAISE EXCEPTION 'speaker finish may only record the end timestamp and completed status';
