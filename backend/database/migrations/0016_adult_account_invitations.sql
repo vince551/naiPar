@@ -39,11 +39,11 @@ CREATE INDEX adult_invitation_expiry_idx
   WHERE accepted_at IS NULL AND revoked_at IS NULL;
 
 CREATE FUNCTION reject_adult_account_invitation_delete()
-RETURNS TRIGGER LANGUAGE plpgsql AS $
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
   RAISE EXCEPTION 'adult_account_invitations cannot be deleted; revoke or accept the invitation instead';
 END;
-$;
+$$;
 CREATE TRIGGER adult_account_invitations_no_delete
 BEFORE DELETE ON adult_account_invitations
 FOR EACH ROW EXECUTE FUNCTION reject_adult_account_invitation_delete();
