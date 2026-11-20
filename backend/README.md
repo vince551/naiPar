@@ -16,6 +16,7 @@ The feature branch now contains a runnable API foundation for child registration
 - Argon2id passphrase/password hashing and dummy-hash verification for unknown login identifiers.
 - `POST /api/v1/auth/child/registration-requests`: creates a pending child account and pending guardian-consent record in one database transaction.
 - `POST /api/v1/auth/login`: verifies child/delegate credentials against guardian-phone lookup plus passphrase, or adult work email plus password. Child sign-in is allowed only for an active account with approved, non-withdrawn consent.
+- Invitation-only adult account provisioning for active administrators: issues 48-hour single-use tokens stored only as SHA-256 digests, accepts clerk/coordinator/stakeholder invitations, hashes passwords with Argon2id, encrypts adult names, and records append-only invitation events plus audit records. Admin, speaker and child/delegate roles cannot be granted by invitation.
 - Opaque 256-bit session tokens stored only as SHA-256 digests, issued in HttpOnly, SameSite=Lax cookies; Secure is enabled in production.
 - Eight-hour server-side sessions, revocation on logout or inactive account status, trusted database-backed role/consent context, CSRF token validation for mutations, JSON-only CSRF token refresh after browser reload, and login-attempt records that retain only a keyed network fingerprint and outcome.
 - Account status, role and credential hash are rechecked under a user-row lock immediately before issuing a session; child consent is also rechecked under lock.
@@ -33,7 +34,7 @@ The feature branch now contains a runnable API foundation for child registration
 ### Not implemented yet
 
 - A configured live SMS gateway and guardian self-service consent. The OTP challenge service and HTTPS gateway adapter exist, but no provider endpoint/token is configured. OTP proves phone possession only; it does not establish legal guardianship or informed consent.
-- Adult account provisioning/registration, password recovery, guardian-assisted child recovery, session listing/device management or MFA.
+- Self-service adult registration, password recovery, guardian-assisted child recovery, session listing/device management or MFA. The first administrator must be bootstrapped out of band; invitation tokens are returned once to the issuing administrator for delivery through an approved secure channel, and no email delivery provider is configured.
 - Motion amendments, voting, resolution generation and stakeholder updates remain unfinished. A dedicated safeguarding case-management workflow is also not implemented.
 - Official Assembly frontend integration for sittings, order papers, motions, debates, amendments, delegate voting, Hansard, member records and stakeholder action. The existing screens for these areas still use illustrative data.
 - A persistent development/staging PostgreSQL environment, deployment, backup/restore or production security review. CI now applies the migrations to a disposable PostgreSQL 16 service.
@@ -54,6 +55,8 @@ Do not collect real children's information or real credentials through this deve
 - Deployment model: separate API/database from the static Vite frontend; place both behind HTTPS
 
 The API does not enable permissive CORS. Prefer a same-origin reverse proxy. If a separate API origin is selected later, add an explicit origin allowlist; never use wildcard credentialed CORS.
+
+Adult invitations are limited to `clerk`, `coordinator` and `stakeholder`. Clerk/coordinator invitations require a county; stakeholder invitations require an organisation. Invitation acceptance creates an active adult account only after the bearer token is validated, stores the password with Argon2id, and stores the full name encrypted. The token digest is never returned or logged. Initial administrator provisioning remains an explicit out-of-band operation.
 
 ## Database model
 
@@ -76,6 +79,7 @@ Migrations in `database/migrations/` are applied in numeric order:
 | `0013_official_sitting_lifecycle.sql` | Adds sitting lifecycle events, clerk-only transitions and a narrow public sitting projection |
 | `0014_motion_submission_review.sql` | Adds delegate motion submission, clerk review, immutable lifecycle events and a reviewed public motion projection |
 | `0015_debate_speaker_queue.sql` | Adds guardian-consent-gated speaker requests, clerk allocation, one active speaker per motion, append-only debate events and actor/event/audit enforcement |
+| `0016_adult_account_invitations.sql` | Adds admin-only, expiring single-use adult invitations, restricted role grants, append-only invitation events and mandatory audit records |
 
 The migration runner wraps each migration and its checksum record in one transaction. It uses a PostgreSQL advisory lock to avoid concurrent migration runs and refuses to continue if an already-applied migration's checksum changes. It runs as a separate command so the API process does not need schema-owner privileges.
 

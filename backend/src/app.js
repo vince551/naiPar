@@ -61,6 +61,14 @@ import {
   DebateValidationError
 } from './domain/debates.js';
 import {
+  createAdultInvitationService,
+  AdultInvitationAccessError,
+  AdultInvitationConflictError,
+  AdultInvitationInvalidError,
+  AdultInvitationNotFoundError,
+  AdultInvitationValidationError
+} from './domain/adult-invitations.js';
+import {
   clearSessionCookie,
   createSessionResolver,
   issueCsrfToken,
@@ -113,6 +121,7 @@ export function createApp({
   const sittings = createSittingService({ pool });
   const motions = createMotionService({ pool });
   const debates = createDebateService({ pool });
+  const adultInvitations = createAdultInvitationService({ pool, fieldCrypto, hashPassword: hashPassphrase });
   const guardianPhoneVerification = createGuardianPhoneVerificationService({
     pool,
     fieldCrypto,
@@ -774,6 +783,90 @@ export function createApp({
     }
   );
 
+  const adminInvitationAccess = [
+    requireSession, requireAuthenticated, requireRoles('admin')
+  ];
+  const adultInvitationCreateLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 10,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: {
+      error: {
+        code: 'ADULT_INVITATION_RATE_LIMITED',
+        message: 'Too many adult invitations have been issued. Please try again later.'
+      }
+    }
+  });
+  const adultInvitationAcceptLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: {
+      error: {
+        code: 'ADULT_INVITATION_ACCEPT_RATE_LIMITED',
+        message: 'Too many invitation attempts. Please try again later.'
+      }
+    }
+  });
+
+  app.get('/api/v1/admin/adult-invitations', ...adminInvitationAccess, async (req, res, next) => {
+    try {
+      const data = await adultInvitations.listInvitations({
+        actorUserId: req.auth.userId, limit: req.query.limit,
+        requestId: req.requestId,
+        networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+      });
+      res.status(200).json({ data });
+    } catch (error) { next(error); }
+  });
+
+  app.post('/api/v1/admin/adult-invitations',
+    ...adminInvitationAccess, requireCsrf, requireJsonContentType, adultInvitationCreateLimiter,
+    async (req, res, next) => {
+      try {
+        const data = await adultInvitations.createInvitation(req.body, {
+          actorUserId: req.auth.userId, requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(201).json({
+          data,
+          message: 'Invitation created. Deliver the one-time token through an approved secure channel; it will not be shown again.'
+        });
+      } catch (error) { next(error); }
+    }
+  );
+
+  app.post('/api/v1/admin/adult-invitations/:invitationId/revoke',
+    ...adminInvitationAccess, requireCsrf, requireJsonContentType,
+    async (req, res, next) => {
+      try {
+        const data = await adultInvitations.revokeInvitation(req.params.invitationId, {
+          actorUserId: req.auth.userId, requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(200).json({ data, message: 'Adult invitation revoked.' });
+      } catch (error) { next(error); }
+    }
+  );
+
+  app.post('/api/v1/auth/adult-invitations/accept',
+    requireJsonContentType, adultInvitationAcceptLimiter,
+    async (req, res, next) => {
+      try {
+        const data = await adultInvitations.acceptInvitation(req.body, {
+          requestId: req.requestId,
+          networkFingerprint: fieldCrypto.fingerprintNetworkAddress(req.ip)
+        });
+        res.status(201).json({
+          data,
+          message: 'Adult account activated. Sign in using the invited work email and the password you created.'
+        });
+      } catch (error) { next(error); }
+    }
+  );
+
   const csrfBootstrapLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 20,
@@ -911,6 +1004,32 @@ export function createApp({
           code: 'CONSENT_REVIEW_CONFLICT',
           message: 'This consent request is no longer available for review.'
         }
+      });
+    }
+
+    if (error instanceof AdultInvitationValidationError) {
+      return res.status(400).json({
+        error: { code: 'ADULT_INVITATION_VALIDATION_FAILED', message: 'Check the invitation details.', fields: error.fields }
+      });
+    }
+    if (error instanceof AdultInvitationAccessError) {
+      return res.status(403).json({
+        error: { code: 'ADULT_INVITATION_ACCESS_REQUIRED', message: 'Only an active administrator may manage adult invitations.' }
+      });
+    }
+    if (error instanceof AdultInvitationNotFoundError) {
+      return res.status(404).json({
+        error: { code: 'ADULT_INVITATION_NOT_FOUND', message: 'The invitation was not found.' }
+      });
+    }
+    if (error instanceof AdultInvitationConflictError) {
+      return res.status(409).json({
+        error: { code: 'ADULT_INVITATION_CONFLICT', message: 'The invitation or account is no longer available for this action.' }
+      });
+    }
+    if (error instanceof AdultInvitationInvalidError) {
+      return res.status(400).json({
+        error: { code: 'ADULT_INVITATION_INVALID', message: 'The invitation is invalid, expired or already used.' }
       });
     }
 
