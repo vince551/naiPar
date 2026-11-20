@@ -29,6 +29,21 @@ async function addEvent(client, id, actor, type, from, to) {
     [id, actor, type, from, to]
   );
 }
+async function rejectedUpdate(actorId, sql, params) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SELECT set_config('app.actor_user_id', $1, true)", [actorId]);
+    await client.query(sql, params);
+    await client.query('COMMIT');
+    return '';
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    return String(error.message);
+  } finally {
+    client.release();
+  }
+}
 
 try {
   const adminId = await createAdult('admin', 'synthetic-admin@example.test', 'Mombasa', null);
@@ -93,16 +108,12 @@ try {
     acceptClient.release();
   }
 
-  let immutableBlocked = false;
-  try {
-    await pool.query(
-      'UPDATE adult_account_invitations SET token_hash = $2 WHERE id = $1',
-      [invitationId, Buffer.alloc(32, 99)]
-    );
-  } catch (error) {
-    immutableBlocked = String(error.message).includes('immutable');
-  }
-  if (!immutableBlocked) fail('An invitation token digest was mutable');
+  const immutableError = await rejectedUpdate(
+    adminId,
+    'UPDATE adult_account_invitations SET token_hash = $2 WHERE id = $1',
+    [invitationId, Buffer.alloc(32, 99)]
+  );
+  if (!immutableError.includes('immutable')) fail('An invitation token digest was mutable');
 
   let eventMutationBlocked = false;
   try {
@@ -115,13 +126,14 @@ try {
   }
   if (!eventMutationBlocked) fail('Adult invitation history was mutable');
 
-  let acceptedRevokeBlocked = false;
-  try {
-    await pool.query('UPDATE adult_account_invitations SET revoked_at = now() WHERE id = $1', [invitationId]);
-  } catch (error) {
-    acceptedRevokeBlocked = String(error.message).includes('invalid adult invitation lifecycle transition');
+  const acceptedRevokeError = await rejectedUpdate(
+    adminId,
+    'UPDATE adult_account_invitations SET revoked_at = now() WHERE id = $1',
+    [invitationId]
+  );
+  if (!acceptedRevokeError.includes('invalid adult invitation lifecycle transition')) {
+    fail('An accepted invitation could be revoked');
   }
-  if (!acceptedRevokeBlocked) fail('An accepted invitation could be revoked');
 
   let invitationDeleteBlocked = false;
   try {
