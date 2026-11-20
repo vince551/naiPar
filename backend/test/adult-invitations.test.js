@@ -219,7 +219,7 @@ test('administrators can list minimal pending invitation metadata and revoke a l
   const revoked = await api.revokeInvitation(issued.id, context(admin));
   assert.ok(revoked.revokedAt);
   assert.equal(pool.events[1][2], 'revoked');
-  assert.equal(pool.audits[1][1], 'adult_invitation.revoked');
+  assert.equal(pool.audits[2][1], 'adult_invitation.revoked');
 });
 
 test('accepted or expired invitations cannot be revoked or reused', async () => {

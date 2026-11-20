@@ -123,6 +123,14 @@ try {
   }
   if (!acceptedRevokeBlocked) fail('An accepted invitation could be revoked');
 
+  let invitationDeleteBlocked = false;
+  try {
+    await pool.query('DELETE FROM adult_account_invitations WHERE id = $1', [invitationId]);
+  } catch (error) {
+    invitationDeleteBlocked = String(error.message).includes('cannot be deleted');
+  }
+  if (!invitationDeleteBlocked) fail('An adult invitation record could be deleted');
+
   const checks = await pool.query(
     "SELECT (SELECT count(*) FROM adult_account_invitations) AS invitations, " +
     "(SELECT count(*) FROM adult_invitation_events) AS events, " +

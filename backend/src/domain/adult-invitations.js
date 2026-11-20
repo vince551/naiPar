@@ -231,6 +231,9 @@ export function createAdultInvitationService({ pool, fieldCrypto, hashPassword }
       await writeEvent(client, row.id, actorUserId, 'issued', null, 'pending', context, { role: input.role });
       await writeAudit(client, row.id, actorUserId, 'adult_invitation.issued', context, { role: input.role });
       return row;
+    }).catch(error => {
+      if (error?.code === '23505') throw new AdultInvitationConflictError();
+      throw error;
     });
 
     // The bearer token is returned once to the authenticated administrator.
