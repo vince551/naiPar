@@ -163,8 +163,15 @@ test('speaker requests reject public children, adults, inactive accounts, missin
 
   const publicChildPool = fakePool();
   publicChildPool.roles.set(delegate, 'public_child');
+  assert.equal(publicChildPool.roles.get(delegate), 'public_child');
   await assert.rejects(
     createDebateService({ pool: publicChildPool }).requestSpeakerSlot(motionId, {}, context(delegate)),
+    DebateAccessError
+  );
+
+  const adultPool = fakePool();
+  await assert.rejects(
+    createDebateService({ pool: adultPool }).requestSpeakerSlot(motionId, {}, context(stakeholder)),
     DebateAccessError
   );
 
