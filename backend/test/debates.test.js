@@ -135,7 +135,7 @@ function fakePool({
   };
 
   return {
-    calls, events, audits, requests,
+    calls, events, audits, requests, roles, statuses,
     get released() { return released; },
     async connect() {
       return { query: run, release() { released += 1; } };
